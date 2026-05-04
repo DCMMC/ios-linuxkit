@@ -233,6 +233,73 @@ int main(void) {
     return 0;
 }
 EOF
+    cat >"$dir/signal_ucontext.c" <<'EOF'
+#define _GNU_SOURCE
+#include <signal.h>
+#include <setjmp.h>
+#include <stdint.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <ucontext.h>
+
+static sigjmp_buf jb;
+static volatile uintptr_t trigger_addr;
+static volatile uintptr_t observed_pc;
+static volatile uintptr_t observed_sp;
+static volatile uintptr_t observed_lr;
+static volatile uintptr_t observed_fault;
+
+__attribute__((noinline)) static void trigger_segv(void) {
+    trigger_addr = (uintptr_t)&trigger_segv;
+    volatile int *p = (volatile int *)0;
+    (void)*p;
+}
+
+static void handler(int sig, siginfo_t *si, void *uctx) {
+    (void)sig;
+    ucontext_t *uc = (ucontext_t *)uctx;
+    observed_pc = (uintptr_t)uc->uc_mcontext.pc;
+    observed_sp = (uintptr_t)uc->uc_mcontext.sp;
+    observed_lr = (uintptr_t)uc->uc_mcontext.regs[30];
+    observed_fault = (uintptr_t)si->si_addr;
+    siglongjmp(jb, 1);
+}
+
+int main(void) {
+    if (offsetof(ucontext_t, uc_mcontext) != 176) {
+        fprintf(stderr, "bad mcontext offset: %zu\n", offsetof(ucontext_t, uc_mcontext));
+        return 1;
+    }
+
+    struct sigaction sa = {0};
+    sa.sa_sigaction = handler;
+    sa.sa_flags = SA_SIGINFO;
+    sigemptyset(&sa.sa_mask);
+    if (sigaction(SIGSEGV, &sa, NULL) != 0)
+        return 1;
+
+    if (sigsetjmp(jb, 1) == 0) {
+        trigger_segv();
+        return 1;
+    }
+
+    if (observed_fault != 0)
+        return 1;
+    if (observed_pc < trigger_addr || observed_pc >= trigger_addr + 256) {
+        fprintf(stderr, "bad pc: trigger=%#lx pc=%#lx sp=%#lx lr=%#lx\n",
+                (unsigned long)trigger_addr, (unsigned long)observed_pc,
+                (unsigned long)observed_sp, (unsigned long)observed_lr);
+        return 1;
+    }
+    if (observed_sp == 0 || observed_lr == 0 || observed_lr == observed_sp)
+        return 1;
+
+    puts("signal-ucontext-ok");
+    return 0;
+}
+EOF
+
 
     push_tree "$dir" "$GUEST_WORK/c"
 }
@@ -388,6 +455,7 @@ main() {
     run_test c "sysv shm/msg IPC" "cd '$GUEST_WORK/c' && gcc -O0 sysv_ipc.c -o sysv_ipc && ./sysv_ipc | grep -qx sysv-ipc-ok"
     run_test c "high-value syscall gaps" "cd '$GUEST_WORK/c' && gcc -O0 syscall_gaps.c -o syscall_gaps -lrt && ./syscall_gaps | grep -qx syscall-gaps-ok"
     run_test c "arm64 DC ZVA sysreg/instruction" "cd '$GUEST_WORK/c' && gcc -O0 dczva.c -o dczva && ./dczva | grep -qx dczva-ok"
+    run_test c "arm64 signal ucontext layout" "cd '$GUEST_WORK/c' && gcc -O0 signal_ucontext.c -o signal_ucontext && ./signal_ucontext | grep -qx signal-ucontext-ok"
 
     ensure_tools go
     prepare_go_fixture

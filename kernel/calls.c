@@ -518,7 +518,7 @@ void handle_interrupt(int interrupt) {
             // mapped) but crash in iSH (because we have unmapped gaps).
             // Rate-limited to prevent infinite loops on true null-pointer derefs.
 #ifdef GUEST_ARM64
-            if (!cpu->segfault_was_write) {
+            if (!cpu->segfault_was_write && cpu->segfault_addr >= 0x1000) {
                 static _Thread_local int read_recovery_count = 0;
                 static _Thread_local addr_t last_recovery_addr = 0;
                 // Reset counter when faulting address changes (scanner moving through memory)

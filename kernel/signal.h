@@ -245,16 +245,11 @@ struct sigcontext_ {
     uint64_t sp;
     uint64_t pc;
     uint64_t pstate;
-    // Extension area for FPSIMD state
-    // NOTE: Do NOT use __attribute__((aligned(16))) here — it forces the
-    // entire sigcontext_ struct to 16-byte alignment, which inserts 8 bytes
-    // of padding before mcontext in ucontext_, shifting mcontext from the
-    // Linux-standard offset 168 to 176. Go's runtime reads mcontext at a
-    // fixed offset (168) from the ucontext pointer, so this misalignment
-    // causes Go's async preemption (SIGURG) to corrupt the signal frame.
-    // The field is naturally 16-byte aligned in practice (offset 448 from
-    // the start of ucontext).
-    uint8_t __reserved[4096];
+    // Extension area for FPSIMD/ESR/SVE records. Linux arm64 aligns this area
+    // to 16 bytes, which also makes ucontext.uc_mcontext land at offset 176
+    // for musl/glibc aarch64. HotSpot's signal handler relies on that ABI
+    // layout for implicit null-check recovery.
+    uint8_t __reserved[4096] __attribute__((aligned(16)));
 };
 
 struct ucontext_ {

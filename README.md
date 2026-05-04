@@ -55,7 +55,7 @@ The first tranche centralizes FD-path lookup, stat timestamp fields, host random
 
 ## Current coverage status
 
-Latest staged runtime report: **23 / 23 passing** (`/workspace/tmp/ish-arm64-runtime-coverage-20260504-105056.md`, `TIMEOUT_S=120`, `INSTALL_TIMEOUT_S=300`). Base shell/APK, C, SysV IPC, high-value syscall gap coverage, ARM64 DC ZVA coverage, Go, Bun, and Node/npm are green in the Linux-host coverage harness.
+Latest staged runtime report: **24 / 24 passing** (`/workspace/tmp/ish-arm64-runtime-coverage-20260504-132203.md`, `TIMEOUT_S=120`, `INSTALL_TIMEOUT_S=300`). Base shell/APK, C, SysV IPC, high-value syscall gap coverage, ARM64 DC ZVA coverage, ARM64 signal-ucontext coverage, Go, Bun, and Node/npm are green in the Linux-host coverage harness.
 
 | Area | Status | Notes |
 |---|---:|---|
@@ -63,6 +63,7 @@ Latest staged runtime report: **23 / 23 passing** (`/workspace/tmp/ish-arm64-run
 | C toolchain | Passing | `gcc` can compile and execute a simple program. |
 | SysV IPC | Passing | Shared memory and message queues work across `fork()` in the staged C coverage test. |
 | ARM64 DC ZVA | Passing | `DCZID_EL0` reports a 64-byte block and `dc zva` zeros the expected aligned block. |
+| ARM64 signal ucontext | Passing | Guest SIGSEGV handlers now see Linux/musl-compatible `ucontext_t` (`uc_mcontext` offset 176), and null read faults are delivered instead of synthesized as zero loads. |
 | Java/OpenJDK | Partial/passing interpreter lane | OpenJDK 21 starts; Java-equivalent Benchmarks Game passes 10/10 with `-Xint -Xshare:off`. Heavier default mixed-mode `javac` remains a JIT/compiler lane. |
 | Go | Passing | `go version`, `go env`, `go tool compile`, `go run`, `go build`, and `go test` pass. |
 | Node/npm | Passing | `node -e`, `npm --version`, and `npm run` pass after mmap/reservation and `pwritev` fixes. |
@@ -81,7 +82,7 @@ Validated so far:
 - 20 consecutive `bun -e "console.log(1)"` repro runs passed.
 - `setTimeout`, a minimal `Bun.serve` + `wget`, and PiClaw's web server now respond inside the guest.
 - PiClaw workspace bootstrap no longer logs the `ENOTSUP ... copyfile` warning when seeding `.pi/skills`.
-- Staged runtime coverage is now **23 / 23 passing**, including SysV shared-memory/message-queue IPC, high-value syscall gap coverage, ARM64 DC ZVA coverage, plus Bun install, TypeScript run, test, and build.
+- Staged runtime coverage is now **24 / 24 passing**, including SysV shared-memory/message-queue IPC, high-value syscall gap coverage, ARM64 DC ZVA coverage, ARM64 signal-ucontext coverage, plus Bun install, TypeScript run, test, and build.
 
 ## Workload smoke tests
 
@@ -89,7 +90,7 @@ The current non-trivial workload results are grouped in [docs/ARM64_WORKLOAD_SMO
 
 Current highlights:
 
-- staged runtime coverage is **23 / 23 passing**;
+- staged runtime coverage is **24 / 24 passing**;
 - Bun + PiClaw now install/start far enough to serve the web UI and no longer hit the recursive `copyfile`/`ENOTSUP` bootstrap issue;
 - `rcarmo/go-gte` can now build, convert `gte-small.gtemodel` inside the guest, and complete `make run-go`; this exposed and fixed missing AdvSIMD `FCVTL`/`FCVTL2` support;
 - the Benchmarks Game core tier now has GCC, G++, Go, Python, Node.js, PHP, Perl, Ruby, and Lua rows passing, and the local Java-equivalent probe now passes 10/10 in HotSpot interpreter mode; all official language labels remain accounted for and tiered by Alpine aarch64 feasibility.
