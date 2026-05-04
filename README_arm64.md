@@ -282,9 +282,10 @@ The coverage script currently exercises, in order:
 1. base shell/apk/tmp file I/O sanity checks;
 2. a C toolchain smoke test (`gcc --version`, compile, execute);
 3. SysV shared-memory/message-queue IPC across `fork()`;
-4. Go (`go version`, `go env`, `go tool compile`, `go run`, `go build`, `go test`);
-5. Bun (`bun --version`, local `file:` dependency install, TypeScript run, test, build);
-6. Node/npm (`node --version`, `node -e`, `npm --version`, `npm run`).
+4. high-value syscall gap coverage (`signalfd4`, SysV semaphores, POSIX mqueues, `memfd_create`, `openat2`, `faccessat2`, `preadv2`, `pwritev2`, `process_vm_*`);
+5. Go (`go version`, `go env`, `go tool compile`, `go run`, `go build`, `go test`);
+6. Bun (`bun --version`, local `file:` dependency install, TypeScript run, test, build);
+7. Node/npm (`node --version`, `node -e`, `npm --version`, `npm run`).
 
 Each run writes a Markdown report named
 `ish-arm64-runtime-coverage-YYYYMMDD-HHMMSS.md` under `REPORT_DIR`. The suite is
@@ -293,10 +294,11 @@ to debug, not as cases to skip.
 
 Current Linux-host status from this pass:
 
-- Latest staged run: **21 / 21 passing** (`/workspace/tmp/ish-arm64-runtime-coverage-20260503-162143.md`, `TIMEOUT_S=120`, `INSTALL_TIMEOUT_S=300`).
+- Latest staged run: **22 / 22 passing** (`/workspace/tmp/ish-arm64-runtime-coverage-20260504-082641.md`, `TIMEOUT_S=120`, `INSTALL_TIMEOUT_S=300`).
 - Non-trivial workload probes are grouped in [docs/ARM64_WORKLOAD_SMOKE_TESTS.md](docs/ARM64_WORKLOAD_SMOKE_TESTS.md): Bun/PiClaw, `rcarmo/go-gte`, and the Benchmarks Game rows.
 - C coverage is green: `gcc --version`, compile, and execute all pass.
 - SysV IPC coverage is green: shared memory and message queues work across `fork()`.
+- High-value syscall gap coverage is green: `signalfd4`, SysV semaphores, POSIX mqueues, `memfd_create`, `openat2`, `faccessat2`, `preadv2`, `pwritev2`, and `process_vm_*` pass in the staged C fixture.
 - Go coverage is green: `go version`, `go env`, `go tool compile`, `go run`,
   `go build` + execute, and `go test` all pass.
 - Bun coverage is green: `bun --version`, local `file:` dependency install,

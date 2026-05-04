@@ -55,7 +55,7 @@ The first tranche centralizes FD-path lookup, stat timestamp fields, host random
 
 ## Current coverage status
 
-Latest staged runtime report: **21 / 21 passing** (`/workspace/tmp/ish-arm64-runtime-coverage-20260503-162143.md`, `TIMEOUT_S=120`, `INSTALL_TIMEOUT_S=300`). Base shell/APK, C, SysV IPC, Go, Bun, and Node/npm are green in the Linux-host coverage harness.
+Latest staged runtime report: **22 / 22 passing** (`/workspace/tmp/ish-arm64-runtime-coverage-20260504-082641.md`, `TIMEOUT_S=120`, `INSTALL_TIMEOUT_S=300`). Base shell/APK, C, SysV IPC, high-value syscall gap coverage, Go, Bun, and Node/npm are green in the Linux-host coverage harness.
 
 | Area | Status | Notes |
 |---|---:|---|
@@ -79,7 +79,7 @@ Validated so far:
 - 20 consecutive `bun -e "console.log(1)"` repro runs passed.
 - `setTimeout`, a minimal `Bun.serve` + `wget`, and PiClaw's web server now respond inside the guest.
 - PiClaw workspace bootstrap no longer logs the `ENOTSUP ... copyfile` warning when seeding `.pi/skills`.
-- Staged runtime coverage is now **21 / 21 passing**, including SysV shared-memory/message-queue IPC plus Bun install, TypeScript run, test, and build.
+- Staged runtime coverage is now **22 / 22 passing**, including SysV shared-memory/message-queue IPC, high-value syscall gap coverage, plus Bun install, TypeScript run, test, and build.
 
 ## Workload smoke tests
 
@@ -87,7 +87,7 @@ The current non-trivial workload results are grouped in [docs/ARM64_WORKLOAD_SMO
 
 Current highlights:
 
-- staged runtime coverage is **21 / 21 passing**;
+- staged runtime coverage is **22 / 22 passing**;
 - Bun + PiClaw now install/start far enough to serve the web UI and no longer hit the recursive `copyfile`/`ENOTSUP` bootstrap issue;
 - `rcarmo/go-gte` can now build, convert `gte-small.gtemodel` inside the guest, and complete `make run-go`; this exposed and fixed missing AdvSIMD `FCVTL`/`FCVTL2` support;
 - the Benchmarks Game core tier now has GCC, G++, Go, Python, Node.js, PHP, Perl, Ruby, and Lua rows passing, with all official language labels accounted for and tiered by Alpine aarch64 feasibility.

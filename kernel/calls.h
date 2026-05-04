@@ -94,9 +94,11 @@ struct iovec64_ {
 dword_t sys_read(fd_t fd_no, addr_t buf_addr, dword_t size);
 dword_t sys_readv(fd_t fd_no, addr_t iovec_addr, dword_t iovec_count);
 dword_t sys_preadv(fd_t fd_no, addr_t iovec_addr, dword_t iovec_count, off_t_ off);
+dword_t sys_preadv2(fd_t fd_no, addr_t iovec_addr, dword_t iovec_count, off_t_ off, dword_t flags);
 dword_t sys_write(fd_t fd_no, addr_t buf_addr, dword_t size);
 dword_t sys_writev(fd_t fd_no, addr_t iovec_addr, dword_t iovec_count);
 dword_t sys_pwritev(fd_t fd_no, addr_t iovec_addr, dword_t iovec_count, off_t_ off);
+dword_t sys_pwritev2(fd_t fd_no, addr_t iovec_addr, dword_t iovec_count, off_t_ off, dword_t flags);
 dword_t sys__llseek(fd_t f, dword_t off_high, dword_t off_low, addr_t res_addr, dword_t whence);
 dword_t sys_lseek(fd_t f, dword_t off, dword_t whence);
 qword_t sys_lseek64(fd_t f, sqword_t off, dword_t whence);
@@ -140,6 +142,7 @@ int_t sys_inotify_rm_watch(fd_t fd, int_t wd);
 // file management
 fd_t sys_open(addr_t path_addr, dword_t flags, mode_t_ mode);
 fd_t sys_openat(fd_t at, addr_t path_addr, dword_t flags, mode_t_ mode);
+fd_t sys_openat2(fd_t at, addr_t path_addr, addr_t how_addr, size_t size);
 dword_t sys_close(fd_t fd);
 dword_t sys_link(addr_t src_addr, addr_t dst_addr);
 dword_t sys_linkat(fd_t src_at_f, addr_t src_addr, fd_t dst_at_f, addr_t dst_addr);
@@ -155,6 +158,7 @@ dword_t sys_mknod(addr_t path_addr, mode_t_ mode, dev_t_ dev);
 dword_t sys_mknodat(fd_t at_f, addr_t path_addr, mode_t_ mode, dev_t_ dev);
 dword_t sys_access(addr_t path_addr, dword_t mode);
 dword_t sys_faccessat(fd_t at_f, addr_t path, mode_t_ mode, dword_t flags);
+dword_t sys_faccessat2(fd_t at_f, addr_t path, mode_t_ mode, dword_t flags);
 dword_t sys_readlink(addr_t path, addr_t buf, dword_t bufsize);
 dword_t sys_readlinkat(fd_t at_f, addr_t path, addr_t buf, dword_t bufsize);
 int_t sys_getdents(fd_t f, addr_t dirents, dword_t count);
@@ -192,10 +196,26 @@ dword_t sys_sendfile64(fd_t out_fd, fd_t in_fd, addr_t offset_addr, dword_t coun
 dword_t sys_splice(fd_t in_fd, addr_t in_off_addr, fd_t out_fd, addr_t out_off_addr, dword_t count, dword_t flags);
 dword_t sys_copy_file_range(fd_t in_fd, addr_t in_off, fd_t out_fd, addr_t out_off, dword_t len, uint_t flags);
 
+int_t sys_memfd_create(addr_t name_addr, uint_t flags);
+ssize_t sys_process_vm_readv(pid_t_ pid, addr_t local_iov_addr, dword_t local_iovcnt, addr_t remote_iov_addr, dword_t remote_iovcnt, dword_t flags);
+ssize_t sys_process_vm_writev(pid_t_ pid, addr_t local_iov_addr, dword_t local_iovcnt, addr_t remote_iov_addr, dword_t remote_iovcnt, dword_t flags);
+
 int_t sys_msgget(int_t key, int_t msgflg);
 int_t sys_msgctl(int_t msqid, int_t cmd, addr_t buf_addr);
 int_t sys_msgsnd(int_t msqid, addr_t msgp, size_t msgsz, int_t msgflg);
 ssize_t sys_msgrcv(int_t msqid, addr_t msgp, size_t msgsz, int64_t msgtyp, int_t msgflg);
+int_t sys_semget(int_t key, int_t nsems, int_t semflg);
+int_t sys_semctl(int_t semid, int_t semnum, int_t cmd, addr_t arg);
+int_t sys_semtimedop(int_t semid, addr_t sops_addr, size_t nsops, addr_t timeout_addr);
+int_t sys_semop(int_t semid, addr_t sops_addr, size_t nsops);
+
+int_t sys_mq_open(addr_t name_addr, int_t oflag, mode_t_ mode, addr_t attr_addr);
+int_t sys_mq_unlink(addr_t name_addr);
+int_t sys_mq_timedsend(fd_t mqdes, addr_t msg_ptr, size_t msg_len, uint_t msg_prio, addr_t abs_timeout_addr);
+ssize_t sys_mq_timedreceive(fd_t mqdes, addr_t msg_ptr, size_t msg_len, addr_t msg_prio_addr, addr_t abs_timeout_addr);
+int_t sys_mq_notify(fd_t mqdes, addr_t notification_addr);
+int_t sys_mq_getsetattr(fd_t mqdes, addr_t newattr_addr, addr_t oldattr_addr);
+
 int_t sys_shmget(int_t key, size_t size, int_t shmflg);
 int_t sys_shmctl(int_t shmid, int_t cmd, addr_t buf_addr);
 addr_t sys_shmat(int_t shmid, addr_t shmaddr, int_t shmflg);

@@ -18,6 +18,40 @@ int xsave_extra = 0;
 int fxsave_extra = 0;
 static void sigmask_set(sigset_t_ set);
 static void altstack_to_user(struct sighand *sighand, struct stack_t_ *user_stack);
+
+struct signalfd_siginfo_ {
+    uint32_t signo;
+    int32_t err;
+    int32_t code;
+    uint32_t pid;
+    uint32_t uid;
+    uint32_t fd;
+    uint32_t tid;
+    uint32_t band;
+    uint32_t overrun;
+    uint32_t trapno;
+    int32_t status;
+    int32_t int_;
+    uint64_t ptr;
+    uint64_t utime;
+    uint64_t stime;
+    uint64_t addr;
+    uint16_t addr_lsb;
+    uint8_t pad[46];
+};
+
+_Static_assert(sizeof(struct signalfd_siginfo_) == 128, "signalfd_siginfo size");
+
+static ssize_t signalfd_read(struct fd *fd, void *buf, size_t bufsize);
+static int signalfd_close(struct fd *fd);
+static int signalfd_getflags(struct fd *fd);
+static int signalfd_setflags(struct fd *fd, dword_t flags);
+static const struct fd_ops signalfd_ops = {
+    .read = signalfd_read,
+    .close = signalfd_close,
+    .getflags = signalfd_getflags,
+    .setflags = signalfd_setflags,
+};
 static bool is_on_altstack(addr_t sp, struct sighand *sighand);
 
 static int signal_is_blockable(int sig) {
@@ -63,8 +97,10 @@ static void deliver_signal_unlocked(struct task *task, int sig, struct siginfo_ 
     sigqueue->info.sig = sig;
     list_add_tail(&task->queue, &sigqueue->queue);
 
-    if (sigset_has(task->blocked & ~task->waiting, sig) && signal_is_blockable(sig))
+    if (sigset_has(task->blocked & ~task->waiting, sig) && signal_is_blockable(sig)) {
+        notify(&task->pause);
         return;
+    }
 
     if (task != current) {
         pthread_kill(task->thread, SIGUSR1);
@@ -865,6 +901,116 @@ int_t sys_rt_sigpending(addr_t set_addr, dword_t size) {
     // as defined by the standard
     sigset_t_ pending = current->pending & current->blocked;
     return user_put_sigset(set_addr, size, pending);
+}
+
+static void signalfd_fill_siginfo(struct signalfd_siginfo_ *out, const struct siginfo_ *in) {
+    memset(out, 0, sizeof(*out));
+    out->signo = in->sig;
+    out->err = in->sig_errno;
+    out->code = in->code;
+    if (in->code == SI_USER_ || in->code == SI_TKILL_ || in->code == SI_TIMER_) {
+        out->pid = in->kill.pid;
+        out->uid = in->kill.uid;
+    }
+    if (in->sig == SIGCHLD_) {
+        out->pid = in->child.pid;
+        out->uid = in->child.uid;
+        out->status = in->child.status;
+        out->utime = in->child.utime;
+        out->stime = in->child.stime;
+    }
+    if (in->sig == SIGSEGV_ || in->sig == SIGBUS_ || in->sig == SIGILL_ || in->sig == SIGFPE_)
+        out->addr = in->fault.addr;
+}
+
+static bool signalfd_dequeue_locked(sigset_t_ mask, struct siginfo_ *info) {
+    struct sigqueue *sigqueue, *tmp;
+    list_for_each_entry_safe(&current->queue, sigqueue, tmp, queue) {
+        if (sigset_has(mask, sigqueue->info.sig)) {
+            list_remove(&sigqueue->queue);
+            sigset_del(&current->pending, sigqueue->info.sig);
+            *info = sigqueue->info;
+            free(sigqueue);
+            return true;
+        }
+    }
+    return false;
+}
+
+static ssize_t signalfd_read(struct fd *fd, void *buf, size_t bufsize) {
+    if (bufsize < sizeof(struct signalfd_siginfo_))
+        return _EINVAL;
+    sigset_t_ mask = (sigset_t_)(uintptr_t)fd->data;
+    size_t count = 0;
+    lock(&current->sighand->lock);
+    for (;;) {
+        struct siginfo_ info;
+        if (signalfd_dequeue_locked(mask, &info)) {
+            struct signalfd_siginfo_ out;
+            signalfd_fill_siginfo(&out, &info);
+            memcpy((char *)buf + count, &out, sizeof(out));
+            count += sizeof(out);
+            if (count + sizeof(out) > bufsize)
+                break;
+            continue;
+        }
+        if (count > 0)
+            break;
+        if (fd->flags & O_NONBLOCK_) {
+            unlock(&current->sighand->lock);
+            return _EAGAIN;
+        }
+        int err = wait_for(&current->pause, &current->sighand->lock, NULL);
+        if (err < 0 && err != _EINTR) {
+            unlock(&current->sighand->lock);
+            return err;
+        }
+    }
+    unlock(&current->sighand->lock);
+    return count;
+}
+
+static int signalfd_close(struct fd *fd) {
+    (void)fd;
+    return 0;
+}
+
+static int signalfd_getflags(struct fd *fd) {
+    return fd->flags;
+}
+
+static int signalfd_setflags(struct fd *fd, dword_t flags) {
+    fd->flags = (fd->flags & ~O_NONBLOCK_) | (flags & O_NONBLOCK_);
+    return 0;
+}
+
+int_t sys_signalfd4(int_t fd_no, addr_t mask_addr, size_t mask_size, int_t flags) {
+    STRACE("signalfd4(%d, %#x, %#zx, %#x)", fd_no, mask_addr, mask_size, flags);
+    if (flags & ~(O_CLOEXEC_ | O_NONBLOCK_))
+        return _EINVAL;
+    sigset_t_ mask;
+    int err = user_get_sigset(mask_addr, mask_size, &mask);
+    if (err < 0)
+        return err;
+    // The kernel silently removes SIGKILL/SIGSTOP from the signalfd mask.
+    sigset_del(&mask, SIGKILL_);
+    sigset_del(&mask, SIGSTOP_);
+    if (fd_no >= 0) {
+        struct fd *fd = f_get(fd_no);
+        if (fd == NULL)
+            return _EBADF;
+        if (fd->ops != &signalfd_ops)
+            return _EINVAL;
+        fd->data = (void *)(uintptr_t)mask;
+        fd_setflags(fd, flags & O_NONBLOCK_);
+        return fd_no;
+    }
+    struct fd *fd = adhoc_fd_create(&signalfd_ops);
+    if (fd == NULL)
+        return _ENOMEM;
+    fd->data = (void *)(uintptr_t)mask;
+    fd->stat.mode = S_IFIFO | 0600;
+    return f_install(fd, flags);
 }
 
 static bool is_on_altstack(addr_t sp, struct sighand *sighand) {

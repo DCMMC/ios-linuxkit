@@ -6,7 +6,7 @@ Updated: 2026-05-04
 
 The current ARM64 Linux-host fakefs is in a good core-runtime state:
 
-- Staged runtime coverage: **21 / 21 passing**.
+- Staged runtime coverage: **22 / 22 passing**.
 - Benchmarks Game core tier: **9 language rows × 10 benchmarks = 90 / 90 runs passing**.
 - Native compiler rows additionally build inside the guest: **GCC 10 / 10 builds**, **G++ 10 / 10 builds**.
 - The rows now include interpreted runtimes, managed runtimes, native compilers, big integers, regex engines, pipes/stdin/stdout, `fork()`, guest pthreads, futex-heavy language runtimes, and SysV shared-memory/message-queue IPC.
@@ -38,18 +38,18 @@ Static analysis of `kernel/arch/arm64/calls.c` as of this appraisal:
 |---|---:|---|
 | ARM64 syscall table span | 440 slots | Numeric span `0..439`; includes many holes/newer syscalls that are not explicitly named. |
 | Explicitly assigned slots | 286 | Includes the `[5 ... 16]` xattr range expanded to 12 slots. |
-| Functional `sys_*` implementations | 189 | Real handlers, excluding xattr/success/silent/loud stubs. |
+| Functional `sys_*` implementations | 207 | Real handlers, excluding xattr/success/silent/loud stubs. |
 | Compatibility success stub | 1 | `sync` returns success. |
 | xattr stub range | 12 | Extended attributes are recognized but not implemented as real storage semantics. |
-| Loud `ENOSYS` stubs | 76 | Printed as stub syscall diagnostics when hit. |
-| Silent `ENOSYS` stubs | 8 | Modern runtime probes where quiet fallback is expected (`io_uring_*`, `pidfd_*`, `openat2`, `faccessat2`, `memfd_create`). |
+| Loud `ENOSYS` stubs | 61 | Printed as stub syscall diagnostics when hit. |
+| Silent `ENOSYS` stubs | 5 | Modern runtime probes where quiet fallback is expected (`io_uring_*`, `pidfd_*`). |
 | Unassigned slots in span | 154 | Default to `ENOSYS`; mostly gaps between older asm-generic and newer syscall ranges. |
 
 Useful ratios:
 
-- Functional coverage of explicitly assigned ARM64 slots: **189 / 286 = 66.1%**.
-- Functional coverage of the full numeric `0..439` span: **189 / 440 = 43.0%**. This denominator overstates practical workload exposure because it includes unassigned holes.
-- Functional-or-benign assigned coverage, counting `sync` success and xattr-recognized stubs: **202 / 286 = 70.6%**.
+- Functional coverage of explicitly assigned ARM64 slots: **207 / 286 = 72.4%**.
+- Functional coverage of the full numeric `0..439` span: **207 / 440 = 47.0%**. This denominator overstates practical workload exposure because it includes unassigned holes.
+- Functional-or-benign assigned coverage, counting `sync` success and xattr-recognized stubs: **220 / 286 = 76.9%**.
 
 ## Coverage strengths
 
@@ -60,8 +60,8 @@ The implemented set is now strong for the workloads currently passing:
 - synchronization: futex wait/wake/requeue/wake-op, robust lists, nanosleep/timers;
 - filesystems: `openat`, `read`/`write`, `readv`/`writev`, `pread`/`pwrite`, `preadv`/`pwritev`, `getdents64`, `statx`, `fstatat`, `copy_file_range`, `sendfile`, `splice`, chmod/chown/link/symlink/rename/unlink/mkdir, `statfs`/`fstatfs`;
 - sockets: core TCP/UDP/Unix socket paths, `socketpair`, `accept4`, `sendmsg`/`recvmsg`, `sendmmsg`/`recvmmsg`, fd passing;
-- IPC: SysV shared memory and message queues enough for PHP/native smoke; eventfd, epoll, timerfd, inotify;
-- runtime probes: `rseq`, quiet fallback stubs for common modern optional probes.
+- IPC: SysV shared memory, SysV semaphores, SysV message queues, POSIX message queues, eventfd, epoll, timerfd, inotify;
+- runtime probes: `rseq`, `memfd_create`, `openat2`, `faccessat2`, `preadv2`, `pwritev2`, `process_vm_readv`, `process_vm_writev`, and quiet fallback stubs for remaining modern optional probes.
 
 ## Known syscall gaps and likely priority
 
@@ -70,13 +70,13 @@ These are not blocking the current smoke set, but they frame the next coverage w
 | Priority | Gap | Why it matters |
 |---|---|---|
 | High | OpenJDK/HotSpot startup | Java is not on the current Benchmarks Game site, but OpenJDK is a high-value runtime. Current failure occurs before bytecode execution and likely exercises ARM64 code generation, signal/error handling, or memory-layout assumptions not covered by other rows. |
-| High if a workload hits it | SysV semaphores: `semget`, `semctl`, `semop`, `semtimedop` | Completes the SysV IPC family; likely needed by older database/IPC-heavy software. |
-| High if a workload hits it | `signalfd4` | Modern event loops sometimes prefer signalfd over traditional signal handling. |
-| Medium | `memfd_create` real implementation | Currently quiet `ENOSYS`; most runtimes fall back, but some sandbox/JIT/package-manager paths may benefit. |
-| Medium | `openat2`, `faccessat2` real implementations | Currently quiet fallback stubs; common on newer glibc but less important on Alpine/musl. |
-| Medium | `preadv2`/`pwritev2` | Can usually fall back to `preadv`/`pwritev`; useful for newer native software. |
-| Medium | `process_vm_readv`/`process_vm_writev` | Debuggers/profilers and some language tools use these. |
-| Medium | POSIX message queues `mq_*` | Less common than SysV IPC in current rows, but a clear IPC gap. |
+| Closed | SysV semaphores: `semget`, `semctl`, `semop`, `semtimedop` | Implemented and covered in staged runtime coverage. |
+| Closed | `signalfd4` | Implemented and covered with blocked-signal delivery through a signalfd. |
+| Closed | `memfd_create` | Implemented with anonymous realfs-backed temp fd semantics and covered with read/write/vector I/O. |
+| Closed | `openat2`, `faccessat2` | Implemented for common no-`resolve` `openat2` and full `faccessat2` forwarding; covered in staged runtime coverage. |
+| Closed | `preadv2`/`pwritev2` | Implemented for `flags == 0` fallback-equivalent semantics; covered in staged runtime coverage. |
+| Closed | `process_vm_readv`/`process_vm_writev` | Implemented for permitted in-emulator task memory copies and covered for self-process copies. |
+| Closed | POSIX message queues `mq_*` | Implemented enough named queue send/receive/attr/unlink semantics for runtime coverage. |
 | Low/currently niche | AIO, `io_uring_*` | Currently quiet fallback works for Node/Bun/npm; true support is a larger subsystem. |
 | Low/currently niche | namespaces, keyrings, fanotify, perf, bpf, seccomp, pkeys, NUMA policy | Important for container/security/profiling workloads, not for current language/runtime smoke. |
 | Deliberately absent | kernel module, swap, reboot, mount-heavy privileged paths | Not expected to be meaningful inside this fakefs/user-mode emulator environment. |
@@ -85,4 +85,18 @@ These are not blocking the current smoke set, but they frame the next coverage w
 
 For userland development workloads, ARM64 iSH is now past the fragile bring-up phase. The strongest evidence is that the same fakefs can run package installs, C/C++ compilation, Go/Bun/Node/Python/PHP/Perl/Ruby/Lua runtime rows, GMP/PCRE/APR/Boost/TBB-linked native code, `fork()` plus SysV IPC, and the go-gte numerical workload.
 
-The remaining risk is less about the already-exercised syscall/instruction core and more about breadth: optional Linux subsystems that real applications may probe opportunistically. The next best hardening step is to add focused lanes for the known medium/high gaps instead of broadening the Benchmarks Game rows further: SysV semaphores, signalfd, memfd, `preadv2`/`pwritev2`, and `process_vm_*` would give the highest marginal syscall coverage.
+The remaining risk is now concentrated less in common development syscalls and more in larger optional subsystems: `io_uring`, AIO, namespace/security/profiling APIs, and the currently blocked OpenJDK/HotSpot ARM64 runtime lane. The highest-value incremental syscall gaps identified earlier have been closed and are now part of staged runtime coverage.
+
+## 2026-05-04 high-value syscall gap closure
+
+Implemented and validated in `/workspace/tmp/ish-arm64-runtime-coverage-20260504-082641.md`:
+
+- `signalfd4`
+- SysV semaphores: `semget`, `semctl`, `semop`, `semtimedop`
+- POSIX message queues: `mq_open`, `mq_unlink`, `mq_timedsend`, `mq_timedreceive`, `mq_notify`, `mq_getsetattr`
+- `memfd_create`
+- `openat2` / `faccessat2`
+- `preadv2` / `pwritev2` with `flags == 0`
+- `process_vm_readv` / `process_vm_writev`
+
+The staged runtime suite now has a dedicated C fixture named `high-value syscall gaps` that compiles and executes these paths inside the guest.

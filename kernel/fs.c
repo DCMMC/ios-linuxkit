@@ -1,6 +1,7 @@
 #include "debug.h"
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include "kernel/calls.h"
 #include "kernel/errno.h"
 #include "kernel/task.h"
@@ -9,6 +10,7 @@
 #include "fs/path.h"
 #include "fs/dev.h"
 #include "fs/real.h"
+#include "platform/platform.h"
 
 static struct fd *at_fd(fd_t f) {
     if (f == AT_FDCWD_)
@@ -87,6 +89,53 @@ fd_t sys_openat(fd_t at_f, addr_t path_addr, dword_t flags, mode_t_ mode) {
 
 fd_t sys_open(addr_t path_addr, dword_t flags, mode_t_ mode) {
     return sys_openat(AT_FDCWD_, path_addr, flags, mode);
+}
+
+struct open_how_ {
+    uint64_t flags;
+    uint64_t mode;
+    uint64_t resolve;
+};
+
+fd_t sys_openat2(fd_t at_f, addr_t path_addr, addr_t how_addr, size_t size) {
+    STRACE("openat2(%d, %#x, %#x, %#zx)", at_f, path_addr, how_addr, size);
+    if (size < sizeof(struct open_how_))
+        return _EINVAL;
+    struct open_how_ how;
+    if (user_read(how_addr, &how, sizeof(how)))
+        return _EFAULT;
+    // Resolve flags are stricter path-walk constraints. Treat unsupported
+    // constraints as EINVAL rather than silently ignoring security semantics.
+    if (how.resolve != 0)
+        return _EINVAL;
+    return sys_openat(at_f, path_addr, (dword_t)how.flags, (mode_t_)how.mode);
+}
+
+dword_t sys_faccessat2(fd_t at_f, addr_t path_addr, mode_t_ mode, dword_t flags) {
+    return sys_faccessat(at_f, path_addr, mode, flags);
+}
+
+#define MFD_CLOEXEC_ 0x0001U
+#define MFD_ALLOW_SEALING_ 0x0002U
+
+int_t sys_memfd_create(addr_t name_addr, uint_t flags) {
+    char name[256];
+    if (name_addr != 0 && user_read_string(name_addr, name, sizeof(name)))
+        return _EFAULT;
+    STRACE("memfd_create(\"%s\", %#x)", name_addr ? name : "", flags);
+    if (flags & ~(MFD_CLOEXEC_ | MFD_ALLOW_SEALING_))
+        return _EINVAL;
+    int host_fd = platform_create_shared_memory_fd(0);
+    if (host_fd < 0)
+        return errno_map();
+    struct fd *fd = adhoc_fd_create(&realfs_fdops);
+    if (fd == NULL) {
+        close(host_fd);
+        return _ENOMEM;
+    }
+    fd->real_fd = host_fd;
+    fd->stat.mode = S_IFREG | 0600;
+    return f_install(fd, (flags & MFD_CLOEXEC_) ? O_CLOEXEC_ : 0);
 }
 
 dword_t sys_readlinkat(fd_t at_f, addr_t path_addr, addr_t buf_addr, dword_t bufsize) {
@@ -597,6 +646,13 @@ dword_t sys_pwritev(fd_t fd_no, addr_t iovec_addr, dword_t iovec_count, off_t_ o
     return res;
 }
 
+dword_t sys_pwritev2(fd_t fd_no, addr_t iovec_addr, dword_t iovec_count, off_t_ off, dword_t flags) {
+    STRACE("pwritev2(%d, %#x, %d, %lld, %#x)", fd_no, iovec_addr, iovec_count, (long long)off, flags);
+    if (flags != 0)
+        return _EOPNOTSUPP;
+    return sys_pwritev(fd_no, iovec_addr, iovec_count, off);
+}
+
 dword_t sys_preadv(fd_t fd_no, addr_t iovec_addr, dword_t iovec_count, off_t_ off) {
     STRACE("preadv(%d, %#x, %d, %lld)", fd_no, iovec_addr, iovec_count, (long long)off);
     struct fd *fd = f_get(fd_no);
@@ -634,6 +690,90 @@ out:
     free(buf);
     free(iovec);
     return res;
+}
+
+dword_t sys_preadv2(fd_t fd_no, addr_t iovec_addr, dword_t iovec_count, off_t_ off, dword_t flags) {
+    STRACE("preadv2(%d, %#x, %d, %lld, %#x)", fd_no, iovec_addr, iovec_count, (long long)off, flags);
+    if (flags != 0)
+        return _EOPNOTSUPP;
+    return sys_preadv(fd_no, iovec_addr, iovec_count, off);
+}
+
+static ssize_t process_vm_copy(pid_t_ pid, addr_t local_iov_addr, dword_t local_iovcnt,
+                               addr_t remote_iov_addr, dword_t remote_iovcnt,
+                               dword_t flags, bool write_remote) {
+    if (flags != 0)
+        return _EINVAL;
+    struct iovec_ *local = read_iovec(local_iov_addr, local_iovcnt);
+    if (IS_ERR(local))
+        return PTR_ERR(local);
+    struct iovec_ *remote = read_iovec(remote_iov_addr, remote_iovcnt);
+    if (IS_ERR(remote)) {
+        free(local);
+        return PTR_ERR(remote);
+    }
+
+    lock(&pids_lock);
+    struct task *task = pid_get_task(pid);
+    unlock(&pids_lock);
+    if (task == NULL) {
+        free(local);
+        free(remote);
+        return _ESRCH;
+    }
+    if (!superuser() && current->euid != task->uid && current->uid != task->uid) {
+        free(local);
+        free(remote);
+        return _EPERM;
+    }
+
+    char buf[4096];
+    size_t li = 0, ri = 0, lo = 0, ro = 0;
+    ssize_t done = 0;
+    while (li < local_iovcnt && ri < remote_iovcnt) {
+        size_t lrem = local[li].len - lo;
+        size_t rrem = remote[ri].len - ro;
+        size_t chunk = lrem < rrem ? lrem : rrem;
+        if (chunk > sizeof(buf))
+            chunk = sizeof(buf);
+        if (chunk == 0) {
+            if (lrem == 0) { li++; lo = 0; }
+            if (rrem == 0) { ri++; ro = 0; }
+            continue;
+        }
+        if (write_remote) {
+            if (user_read(local[li].base + lo, buf, chunk))
+                break;
+            if (user_write_task(task, remote[ri].base + ro, buf, chunk))
+                break;
+        } else {
+            if (user_read_task(task, remote[ri].base + ro, buf, chunk))
+                break;
+            if (user_write(local[li].base + lo, buf, chunk))
+                break;
+        }
+        done += chunk;
+        lo += chunk;
+        ro += chunk;
+        if (lo == local[li].len) { li++; lo = 0; }
+        if (ro == remote[ri].len) { ri++; ro = 0; }
+    }
+
+    free(local);
+    free(remote);
+    return done > 0 ? done : _EFAULT;
+}
+
+ssize_t sys_process_vm_readv(pid_t_ pid, addr_t local_iov_addr, dword_t local_iovcnt,
+                             addr_t remote_iov_addr, dword_t remote_iovcnt, dword_t flags) {
+    STRACE("process_vm_readv(%d, %#x, %d, %#x, %d, %#x)", pid, local_iov_addr, local_iovcnt, remote_iov_addr, remote_iovcnt, flags);
+    return process_vm_copy(pid, local_iov_addr, local_iovcnt, remote_iov_addr, remote_iovcnt, flags, false);
+}
+
+ssize_t sys_process_vm_writev(pid_t_ pid, addr_t local_iov_addr, dword_t local_iovcnt,
+                              addr_t remote_iov_addr, dword_t remote_iovcnt, dword_t flags) {
+    STRACE("process_vm_writev(%d, %#x, %d, %#x, %d, %#x)", pid, local_iov_addr, local_iovcnt, remote_iov_addr, remote_iovcnt, flags);
+    return process_vm_copy(pid, local_iov_addr, local_iovcnt, remote_iov_addr, remote_iovcnt, flags, true);
 }
 
 static int fd_ioctl(struct fd *fd, dword_t cmd, addr_t arg) {
