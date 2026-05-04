@@ -19,10 +19,10 @@ A workload belongs here when it exercises at least one of these boundaries:
 
 | Workload | Current status | Why it was chosen | Latest useful log/report |
 |---|---:|---|---|
-| Staged runtime coverage | Passing, 22/22 | Fast regression gate for shell, `apk`, tmp I/O, C, SysV IPC, high-value syscall gap coverage, Go, Bun, Node/npm. Catches broad syscall/runtime regressions before heavier probes. | `/workspace/tmp/ish-arm64-runtime-coverage-20260504-082641.md` |
+| Staged runtime coverage | Passing, 23/23 | Fast regression gate for shell, `apk`, tmp I/O, C, SysV IPC, high-value syscall gap coverage, ARM64 DC ZVA coverage, Go, Bun, Node/npm. Catches broad syscall/runtime regressions before heavier probes. | `/workspace/tmp/ish-arm64-runtime-coverage-20260504-105056.md` |
 | Bun + PiClaw bootstrap/server | Passing for install/start/web listen | Exercises modern JS runtime behavior: high `mmap` reservations, JSC GC signaling/timers, recursive package/workspace copies, sockets, HTTP serving, and PiClaw's startup probes. | `/workspace/tmp/piclaw-yolo-run-enotsup-fixed.log` and exposed server logs |
 | `rcarmo/go-gte` | Model conversion, `go test ./...`, and `make run-go` passing; `make go-build` still has upstream missing `cmd/test_gte` | Exercises Go toolchain, Python wheels, safetensors/numpy model conversion, 128 MB binary model I/O, FP16→FP32 AdvSIMD conversion, NEON math kernels, and Go runtime scheduling. | `docs/GO_GTE_PROGRESS.md` |
-| Benchmarks Game suite | GCC, G++, Go, Python, Node.js, PHP, Perl, Ruby, and Lua rows passing 10/10; source/language feasibility mapped | Broad cross-language benchmark corpus covering allocation, recursion, numeric FP, regex/text throughput, big integers, stdout/stdin streams, native compilers, managed runtimes, native compilers, SIMD portability, IPC, shared memory, and package availability. | [BENCHMARKSGAME_MATRIX.md](BENCHMARKSGAME_MATRIX.md), [BENCHMARKSGAME_GCC_SMOKE.md](BENCHMARKSGAME_GCC_SMOKE.md), [BENCHMARKSGAME_GPP_SMOKE.md](BENCHMARKSGAME_GPP_SMOKE.md), [BENCHMARKSGAME_GO_SMOKE.md](BENCHMARKSGAME_GO_SMOKE.md), [BENCHMARKSGAME_PYTHON_SMOKE.md](BENCHMARKSGAME_PYTHON_SMOKE.md), [BENCHMARKSGAME_NODE_SMOKE.md](BENCHMARKSGAME_NODE_SMOKE.md), [BENCHMARKSGAME_PHP_SMOKE.md](BENCHMARKSGAME_PHP_SMOKE.md), [BENCHMARKSGAME_PERL_SMOKE.md](BENCHMARKSGAME_PERL_SMOKE.md), [BENCHMARKSGAME_RUBY_SMOKE.md](BENCHMARKSGAME_RUBY_SMOKE.md), [BENCHMARKSGAME_LUA_SMOKE.md](BENCHMARKSGAME_LUA_SMOKE.md) |
+| Benchmarks Game suite | GCC, G++, Go, Python, Node.js, PHP, Perl, Ruby, and Lua rows passing 10/10; Java-equivalent probe passing 10/10 in interpreter mode; source/language feasibility mapped | Broad cross-language benchmark corpus covering allocation, recursion, numeric FP, regex/text throughput, big integers, stdout/stdin streams, native compilers, managed runtimes, native compilers, SIMD portability, IPC, shared memory, and package availability. | [BENCHMARKSGAME_MATRIX.md](BENCHMARKSGAME_MATRIX.md), [BENCHMARKSGAME_GCC_SMOKE.md](BENCHMARKSGAME_GCC_SMOKE.md), [BENCHMARKSGAME_GPP_SMOKE.md](BENCHMARKSGAME_GPP_SMOKE.md), [BENCHMARKSGAME_GO_SMOKE.md](BENCHMARKSGAME_GO_SMOKE.md), [BENCHMARKSGAME_PYTHON_SMOKE.md](BENCHMARKSGAME_PYTHON_SMOKE.md), [BENCHMARKSGAME_NODE_SMOKE.md](BENCHMARKSGAME_NODE_SMOKE.md), [BENCHMARKSGAME_PHP_SMOKE.md](BENCHMARKSGAME_PHP_SMOKE.md), [BENCHMARKSGAME_PERL_SMOKE.md](BENCHMARKSGAME_PERL_SMOKE.md), [BENCHMARKSGAME_RUBY_SMOKE.md](BENCHMARKSGAME_RUBY_SMOKE.md), [BENCHMARKSGAME_LUA_SMOKE.md](BENCHMARKSGAME_LUA_SMOKE.md), [BENCHMARKSGAME_JAVA_EQUIVALENT_SMOKE.md](BENCHMARKSGAME_JAVA_EQUIVALENT_SMOKE.md) |
 
 ## Staged runtime coverage
 
@@ -35,8 +35,8 @@ make test-arm64-runtime-coverage REPORT_DIR=/workspace/tmp TIMEOUT_S=120 INSTALL
 Latest result:
 
 ```text
-22 / 22 passing
-report: /workspace/tmp/ish-arm64-runtime-coverage-20260504-082641.md
+23 / 23 passing
+report: /workspace/tmp/ish-arm64-runtime-coverage-20260504-105056.md
 ```
 
 Why it matters:
@@ -316,13 +316,13 @@ tests/arm64/benchmarksgame/run-java-equivalent-smoke.sh
 Current result:
 
 ```text
-Java startup: FAIL
-Build result: FAIL
-Result: 0 / 10 passing
-report: /workspace/tmp/benchmarksgame-java-equivalent-smoke-20260504-080257.md
+Java startup: PASS
+Build result: PASS
+Result: 10 / 10 passing
+report: /workspace/tmp/benchmarksgame-java-equivalent-smoke-20260504-104851.md
 ```
 
-The current Benchmarks Game performance pages do not advertise a Java row. The probe therefore generates local Java equivalents for the ten benchmark families and first checks whether OpenJDK can start inside ARM64 iSH. OpenJDK 21 is currently blocked before `javac` or benchmark code can run: `java -version` trips a HotSpot fatal error (`assembler_aarch64.hpp:245`, `guarantee(val < (1ULL << nbits)) failed: Field too big for insn`) and then repeatedly faults while writing the HotSpot error report. OpenJDK 17 shows the same assembler failure, and OpenJDK 11 reaches a different early HotSpot internal error (`fieldInfo.hpp:171`, `ShouldNotReachHere()`). No missing syscall stub is printed during the startup probe, so this is being tracked as an ARM64 instruction/memory-layout/HotSpot-runtime correctness lane rather than a benchmark-source issue.
+The current Benchmarks Game performance pages do not advertise a Java row. The probe therefore generates local Java equivalents for the ten benchmark families. OpenJDK 21 now starts after fixing ARM64 `DCZID_EL0`/`dc zva` handling: ARM64 iSH advertises a 64-byte DC ZVA block and implements the zeroing instruction. The Java-equivalent lane runs `javac` and benchmark execution in HotSpot interpreter mode (`-Xint -Xshare:off`) and passes all ten equivalents. Default mixed-mode `java -version` and a trivial `java Hello` smoke also pass; heavier default mixed-mode `javac` remains a separate HotSpot/JIT correctness lane.
 
 ### Proposed harness shape
 

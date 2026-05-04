@@ -3629,6 +3629,45 @@ msub_store:
     // NOP — we don't emulate interrupt masking
     gret
 
+// DC ZVA, Xt - zero a 64-byte naturally aligned data-cache block.
+// Code stream: [gadget addr][rt]
+.gadget dc_zva
+    ldr x8, [_pc]           // rt
+    add _pc, _pc, #8
+    and x8, x8, #0x1f
+
+    add x9, _cpu, #CPU_x0
+    cmp x8, #31
+    b.eq 1f
+    ldr x12, [x9, x8, lsl #3]
+    b 2f
+1:  mov x12, #0             // XZR as the address operand if rt==31
+2:  and x12, x12, #0xffffffffffff
+    and x12, x12, #0xffffffffffffffc0
+
+    stp x19, x20, [sp, #-16]!
+    mov x19, x12
+    save_c
+    sub x0, _tlb, #TLB_entries
+    mov x1, x19
+    mov x2, #64
+    bl NAME(__tlb_zero)
+    mov x20, x0
+    restore_c
+    cbz x20, 3f
+    ldp x19, x20, [sp], #16
+    gret
+
+3:  ldp x19, x20, [sp], #16
+    ldr x8, [_tlb, #(-TLB_entries+TLB_segfault_addr)]
+    str x8, [_cpu, #CPU_segfault_addr]
+    mov w9, #1
+    strb w9, [_cpu, #CPU_segfault_was_write]
+    ldr x8, [_cpu, #LOCAL_jit_saved_pc]
+    str x8, [_cpu, #CPU_pc]
+    mov w0, #INT_GPF
+    b fiber_exit
+
 // MRS Xt, <sysreg> - generic system register read
 // Code stream: [gadget addr][rt][sysreg_id]
 // sysreg_id values:
@@ -3701,8 +3740,10 @@ msub_store:
     b .Lmrs_store
 
 .Lmrs_dczid_el0:
-    // DC ZVA is prohibited (DZP bit 4 = 1), block size = 4 (64 bytes)
-    mov x10, #0x14
+    // Advertise DC ZVA with a 64-byte block (BS=4 => 4 << 4).
+    // HotSpot probes this register during startup and emits DC ZVA stubs when
+    // block zeroing is available; gadget_dc_zva implements the zeroing.
+    mov x10, #0x4
     b .Lmrs_store
 
 .Lmrs_fpcr:

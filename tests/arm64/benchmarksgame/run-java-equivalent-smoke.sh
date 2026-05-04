@@ -107,7 +107,8 @@ set -eu
 export PATH=/usr/lib/jvm/java-21-openjdk/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 cd /tmp/benchmarksgame-java-equivalent-smoke
 mkdir -p out classes
-JAVA_OPTS='-Xmx128m -Xms16m'
+JAVA_OPTS='-Xint -Xshare:off -Xmx128m -Xms16m'
+JAVAC_OPTS='-J-Xint -J-Xshare:off -J-Xmx128m -J-Xms16m'
 echo "__JAVA_VERSION_BEGIN"
 # Keep HotSpot fatal-error spew bounded if the VM cannot start.
 (timeout 20 sh -c "java $JAVA_OPTS -version 2>&1 | head -80") || true
@@ -121,7 +122,7 @@ if ! grep -q 'OpenJDK\|Java VM' /tmp/java-version-ok.log || grep -q 'Internal Er
     cat /tmp/java-version-ok.log
     exit 1
 fi
-javac -d classes src/BenchmarkSmoke.java
+javac $JAVAC_OPTS -d classes src/BenchmarkSmoke.java
 echo "__JAVA_BUILD:PASS"
 python3 - <<'PY' > input.fa
 print('>THREE')

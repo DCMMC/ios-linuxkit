@@ -678,6 +678,7 @@ extern void gadget_msr_nzcv(void);
 extern void gadget_msr_fpcr(void);
 extern void gadget_msr_fpsr(void);
 extern void gadget_msr_daif(void);
+extern void gadget_dc_zva(void);
 
 // Byte reverse and bit manipulation gadgets
 extern void gadget_rev(void);
@@ -1767,6 +1768,14 @@ static int gen_branch(struct gen_state *state, uint32_t insn) {
         // Encoding: 1101 0101 0000 0011 0011 CRm 0101 1111 = 0xd503305f | (CRm << 8)
         if ((insn & 0xfffff0ff) == 0xd503305f) {
             // NOP — exclusive monitor is cleared by STXR/STLXR in our implementation
+            return 1;
+        }
+
+        // Data cache zero by VA. DCZID_EL0 below advertises a 64-byte block.
+        if ((insn & 0xffffffe0) == 0xd50b7420) {  // DC ZVA
+            uint32_t rt = insn & 0x1f;
+            gen(state, (unsigned long) gadget_dc_zva);
+            gen(state, rt);
             return 1;
         }
 

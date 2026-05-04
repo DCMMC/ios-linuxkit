@@ -122,4 +122,4 @@ The current Benchmarks Game pages do not advertise a Java row. To keep Java visi
 tests/arm64/benchmarksgame/run-java-equivalent-smoke.sh
 ```
 
-Current result: blocked at OpenJDK startup. `java -version` fails before `javac` or the generated Java benchmark equivalents can run, with a HotSpot ARM64 fatal error in `assembler_aarch64.hpp`.
+Current result: 10/10 passing in HotSpot interpreter mode (`-Xint -Xshare:off`). The previous OpenJDK startup blocker was fixed by advertising a 64-byte `DCZID_EL0` block and implementing `dc zva`; default mixed-mode `java -version` and a trivial `java Hello` also pass. Heavier default mixed-mode `javac` remains a separate JIT/compiler correctness lane, so this probe forces `javac` through `-J-Xint`.

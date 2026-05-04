@@ -201,6 +201,39 @@ int main(){
  puts("syscall-gaps-ok"); return 0;
 }
 EOF
+    cat >"$dir/dczva.c" <<'EOF'
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+    uint64_t dczid = 0;
+    __asm__ volatile("mrs %0, dczid_el0" : "=r"(dczid));
+    if (dczid != 4) {
+        fprintf(stderr, "unexpected dczid=%llu\n", (unsigned long long)dczid);
+        return 1;
+    }
+
+    unsigned char *p = NULL;
+    if (posix_memalign((void **)&p, 64, 128) != 0)
+        return 1;
+    memset(p, 0xaa, 128);
+    __asm__ volatile("dc zva, %0" :: "r"(p + 17) : "memory");
+
+    for (int i = 0; i < 64; i++)
+        if (p[i] != 0)
+            return 1;
+    for (int i = 64; i < 128; i++)
+        if (p[i] != 0xaa)
+            return 1;
+
+    puts("dczva-ok");
+    free(p);
+    return 0;
+}
+EOF
+
     push_tree "$dir" "$GUEST_WORK/c"
 }
 
@@ -354,6 +387,7 @@ main() {
     run_test c "compile + run" "cd '$GUEST_WORK/c' && gcc -O0 hello.c -o hello && ./hello | grep -q '^c-runtime-ok '"
     run_test c "sysv shm/msg IPC" "cd '$GUEST_WORK/c' && gcc -O0 sysv_ipc.c -o sysv_ipc && ./sysv_ipc | grep -qx sysv-ipc-ok"
     run_test c "high-value syscall gaps" "cd '$GUEST_WORK/c' && gcc -O0 syscall_gaps.c -o syscall_gaps -lrt && ./syscall_gaps | grep -qx syscall-gaps-ok"
+    run_test c "arm64 DC ZVA sysreg/instruction" "cd '$GUEST_WORK/c' && gcc -O0 dczva.c -o dczva && ./dczva | grep -qx dczva-ok"
 
     ensure_tools go
     prepare_go_fixture

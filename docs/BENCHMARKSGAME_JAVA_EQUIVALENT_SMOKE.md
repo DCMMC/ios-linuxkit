@@ -1,251 +1,76 @@
 # Benchmarks Game Java-equivalent smoke report
 
-- Timestamp: 2026-05-04T08:03:46+00:00
+- Timestamp: 2026-05-04T10:50:29+00:00
 - ish binary: /workspace/projects/ish-arm64/build-arm64-linux/ish
 - rootfs: /workspace/projects/ish-arm64/alpine-arm64-fakefs
 - timeout: 1200s
 - guest workdir: /tmp/benchmarksgame-java-equivalent-smoke
 - Source status: current Benchmarks Game pages do not advertise a Java language row; this runner uses local Java equivalents.
-- Java startup: FAIL
-- Build result: FAIL
-- Result: 0 / 10 passing
+- Java startup: PASS
+- Build result: PASS
+- Result: 10 / 10 passing
 
 ## Results
 
 | Benchmark | Status | Bytes | Lines | CRC:Size | Time (s) |
 |---|---:|---:|---:|---|---:|
-| binarytrees | BLOCKED | 0 | 0 | — | — |
-| fannkuchredux | BLOCKED | 0 | 0 | — | — |
-| fasta | BLOCKED | 0 | 0 | — | — |
-| knucleotide | BLOCKED | 0 | 0 | — | — |
-| mandelbrot | BLOCKED | 0 | 0 | — | — |
-| nbody | BLOCKED | 0 | 0 | — | — |
-| pidigits | BLOCKED | 0 | 0 | — | — |
-| regexredux | BLOCKED | 0 | 0 | — | — |
-| revcomp | BLOCKED | 0 | 0 | — | — |
-| spectralnorm | BLOCKED | 0 | 0 | — | — |
+| binarytrees | PASS | 144 | 4 | 3398443640:144 | 2.10 |
+| fannkuchredux | PASS | 24 | 2 | 3876461884:24 | 2.04 |
+| fasta | PASS | 1024 | 18 | 1840911314:1024 | 1.44 |
+| knucleotide | PASS | 100 | 13 | 463387513:100 | 5.52 |
+| mandelbrot | PASS | 1311 | 2 | 640347331:1311 | 2.71 |
+| nbody | PASS | 26 | 2 | 980964627:26 | 2.80 |
+| pidigits | PASS | 151 | 10 | 3273113594:151 | 2.43 |
+| regexredux | PASS | 263 | 13 | 3404323976:263 | 7.37 |
+| revcomp | PASS | 10174 | 168 | 2332509513:10174 | 2.52 |
+| spectralnorm | PASS | 12 | 1 | 2938823901:12 | 3.87 |
 
 ## Raw guest log tail
 
 ```text
-  block insns from PC=0xef66e3c8:
-    0xef66e3c8: 0x38401402
-    0xef66e3cc: 0xaa0003f3
-    0xef66e3d0: 0xaa0003f6
-    0xef66e3d4: 0xaa1403e0
-    0xef66e3d8: 0x94005b02
-    0xef66e3dc: 0xeb15027f
-    0xef66e3e0: 0x54ffff03
-    0xef66e3e4: 0x17ffffe3
-21 page fault on 0x1ea1390b935e at 0xef66e3c8 (read)
-  insn=0x38401402 x0=0x1ea1390b935e x1=0xefac8ae0 x2=0xefeb75b3 x3=0x22b8d9
-  sp=0xeecc0ed0 x29=0xeecc0ed0 x30=0xef66e3dc brk=0xf0003000
-  x4=0xeecc1a60 x5=0x3 x8=0x40 x9=0xeecc4a80 x10=0x30
-  sp+0x3e8=0xeecc12b8 jit_crashes=0
-  block insns from PC=0xef66e3c8:
-    0xef66e3c8: 0x38401402
-    0xef66e3cc: 0xaa0003f3
-    0xef66e3d0: 0xaa0003f6
-    0xef66e3d4: 0xaa1403e0
-    0xef66e3d8: 0x94005b02
-    0xef66e3dc: 0xeb15027f
-    0xef66e3e0: 0x54ffff03
-    0xef66e3e4: 0x17ffffe3
-21 page fault on 0x1ea1390b935f at 0xef66e3c8 (read)
-  insn=0x38401402 x0=0x1ea1390b935f x1=0xefac8ae0 x2=0xefeb75b3 x3=0x22b8dc
-  sp=0xeecc0ed0 x29=0xeecc0ed0 x30=0xef66e3dc brk=0xf0003000
-  x4=0xeecc1a60 x5=0x3 x8=0x40 x9=0xeecc4a80 x10=0x30
-  sp+0x3e8=0xeecc12b8 jit_crashes=0
-  block insns from PC=0xef66e3c8:
-    0xef66e3c8: 0x38401402
-    0xef66e3cc: 0xaa0003f3
-    0xef66e3d0: 0xaa0003f6
-    0xef66e3d4: 0xaa1403e0
-    0xef66e3d8: 0x94005b02
-    0xef66e3dc: 0xeb15027f
-    0xef66e3e0: 0x54ffff03
-    0xef66e3e4: 0x17ffffe3
-21 page fault on 0x1ea1390b9360 at 0xef66e3c8 (read)
-  insn=0x38401402 x0=0x1ea1390b9360 x1=0xefac8ae0 x2=0xefeb75b3 x3=0x22b8df
-  sp=0xeecc0ed0 x29=0xeecc0ed0 x30=0xef66e3dc brk=0xf0003000
-  x4=0xeecc1a60 x5=0x3 x8=0x40 x9=0xeecc4a80 x10=0x30
-  sp+0x3e8=0xeecc12b8 jit_crashes=0
-  block insns from PC=0xef66e3c8:
-    0xef66e3c8: 0x38401402
-    0xef66e3cc: 0xaa0003f3
-    0xef66e3d0: 0xaa0003f6
-    0xef66e3d4: 0xaa1403e0
-    0xef66e3d8: 0x94005b02
-    0xef66e3dc: 0xeb15027f
-    0xef66e3e0: 0x54ffff03
-    0xef66e3e4: 0x17ffffe3
-21 page fault on 0x1ea1390b9361 at 0xef66e3c8 (read)
-  insn=0x38401402 x0=0x1ea1390b9361 x1=0xefac8ae0 x2=0xefeb75b3 x3=0x22b8e2
-  sp=0xeecc0ed0 x29=0xeecc0ed0 x30=0xef66e3dc brk=0xf0003000
-  x4=0xeecc1a60 x5=0x3 x8=0x40 x9=0xeecc4a80 x10=0x30
-  sp+0x3e8=0xeecc12b8 jit_crashes=0
-  block insns from PC=0xef66e3c8:
-    0xef66e3c8: 0x38401402
-    0xef66e3cc: 0xaa0003f3
-    0xef66e3d0: 0xaa0003f6
-    0xef66e3d4: 0xaa1403e0
-    0xef66e3d8: 0x94005b02
-    0xef66e3dc: 0xeb15027f
-    0xef66e3e0: 0x54ffff03
-    0xef66e3e4: 0x17ffffe3
-21 page fault on 0x1ea1390b9362 at 0xef66e3c8 (read)
-  insn=0x38401402 x0=0x1ea1390b9362 x1=0xefac8ae0 x2=0xefeb75b3 x3=0x22b8e5
-  sp=0xeecc0ed0 x29=0xeecc0ed0 x30=0xef66e3dc brk=0xf0003000
-  x4=0xeecc1a60 x5=0x3 x8=0x40 x9=0xeecc4a80 x10=0x30
-  sp+0x3e8=0xeecc12b8 jit_crashes=0
-  block insns from PC=0xef66e3c8:
-    0xef66e3c8: 0x38401402
-    0xef66e3cc: 0xaa0003f3
-    0xef66e3d0: 0xaa0003f6
-    0xef66e3d4: 0xaa1403e0
-    0xef66e3d8: 0x94005b02
-    0xef66e3dc: 0xeb15027f
-    0xef66e3e0: 0x54ffff03
-    0xef66e3e4: 0x17ffffe3
-21 page fault on 0x1ea1390b9363 at 0xef66e3c8 (read)
-  insn=0x38401402 x0=0x1ea1390b9363 x1=0xefac8ae0 x2=0xefeb75b3 x3=0x22b8e8
-  sp=0xeecc0ed0 x29=0xeecc0ed0 x30=0xef66e3dc brk=0xf0003000
-  x4=0xeecc1a60 x5=0x3 x8=0x40 x9=0xeecc4a80 x10=0x30
-  sp+0x3e8=0xeecc12b8 jit_crashes=0
-  block insns from PC=0xef66e3c8:
-    0xef66e3c8: 0x38401402
-    0xef66e3cc: 0xaa0003f3
-    0xef66e3d0: 0xaa0003f6
-    0xef66e3d4: 0xaa1403e0
-    0xef66e3d8: 0x94005b02
-    0xef66e3dc: 0xeb15027f
-    0xef66e3e0: 0x54ffff03
-    0xef66e3e4: 0x17ffffe3
-21 page fault on 0x1ea1390b9364 at 0xef66e3c8 (read)
-  insn=0x38401402 x0=0x1ea1390b9364 x1=0xefac8ae0 x2=0xefeb75b3 x3=0x22b8eb
-  sp=0xeecc0ed0 x29=0xeecc0ed0 x30=0xef66e3dc brk=0xf0003000
-  x4=0xeecc1a60 x5=0x3 x8=0x40 x9=0xeecc4a80 x10=0x30
-  sp+0x3e8=0xeecc12b8 jit_crashes=0
-  block insns from PC=0xef66e3c8:
-    0xef66e3c8: 0x38401402
-    0xef66e3cc: 0xaa0003f3
-    0xef66e3d0: 0xaa0003f6
-    0xef66e3d4: 0xaa1403e0
-    0xef66e3d8: 0x94005b02
-    0xef66e3dc: 0xeb15027f
-    0xef66e3e0: 0x54ffff03
-    0xef66e3e4: 0x17ffffe3
-21 page fault on 0x1ea1390b9365 at 0xef66e3c8 (read)
-  insn=0x38401402 x0=0x1ea1390b9365 x1=0xefac8ae0 x2=0xefeb75b3 x3=0x22b8ee
-  sp=0xeecc0ed0 x29=0xeecc0ed0 x30=0xef66e3dc brk=0xf0003000
-  x4=0xeecc1a60 x5=0x3 x8=0x40 x9=0xeecc4a80 x10=0x30
-  sp+0x3e8=0xeecc12b8 jit_crashes=0
-  block insns from PC=0xef66e3c8:
-    0xef66e3c8: 0x38401402
-    0xef66e3cc: 0xaa0003f3
-    0xef66e3d0: 0xaa0003f6
-    0xef66e3d4: 0xaa1403e0
-    0xef66e3d8: 0x94005b02
-    0xef66e3dc: 0xeb15027f
-    0xef66e3e0: 0x54ffff03
-    0xef66e3e4: 0x17ffffe3
-21 page fault on 0x1ea1390b9366 at 0xef66e3c8 (read)
-  insn=0x38401402 x0=0x1ea1390b9366 x1=0xefac8ae0 x2=0xefeb75b3 x3=0x22b8f1
-  sp=0xeecc0ed0 x29=0xeecc0ed0 x30=0xef66e3dc brk=0xf0003000
-  x4=0xeecc1a60 x5=0x3 x8=0x40 x9=0xeecc4a80 x10=0x30
-  sp+0x3e8=0xeecc12b8 jit_crashes=0
-  block insns from PC=0xef66e3c8:
-    0xef66e3c8: 0x38401402
-    0xef66e3cc: 0xaa0003f3
-    0xef66e3d0: 0xaa0003f6
-    0xef66e3d4: 0xaa1403e0
-    0xef66e3d8: 0x94005b02
-    0xef66e3dc: 0xeb15027f
-    0xef66e3e0: 0x54ffff03
-    0xef66e3e4: 0x17ffffe3
-21 page fault on 0x1ea1390b9367 at 0xef66e3c8 (read)
-  insn=0x38401402 x0=0x1ea1390b9367 x1=0xefac8ae0 x2=0xefeb75b3 x3=0x22b8f4
-  sp=0xeecc0ed0 x29=0xeecc0ed0 x30=0xef66e3dc brk=0xf0003000
-  x4=0xeecc1a60 x5=0x3 x8=0x40 x9=0xeecc4a80 x10=0x30
-  sp+0x3e8=0xeecc12b8 jit_crashes=0
-  block insns from PC=0xef66e3c8:
-    0xef66e3c8: 0x38401402
-    0xef66e3cc: 0xaa0003f3
-    0xef66e3d0: 0xaa0003f6
-    0xef66e3d4: 0xaa1403e0
-    0xef66e3d8: 0x94005b02
-    0xef66e3dc: 0xeb15027f
-    0xef66e3e0: 0x54ffff03
-    0xef66e3e4: 0x17ffffe3
-21 page fault on 0x1ea1390b9368 at 0xef66e3c8 (read)
-  insn=0x38401402 x0=0x1ea1390b9368 x1=0xefac8ae0 x2=0xefeb75b3 x3=0x22b8f7
-  sp=0xeecc0ed0 x29=0xeecc0ed0 x30=0xef66e3dc brk=0xf0003000
-  x4=0xeecc1a60 x5=0x3 x8=0x40 x9=0xeecc4a80 x10=0x30
-  sp+0x3e8=0xeecc12b8 jit_crashes=0
-  block insns from PC=0xef66e3c8:
-    0xef66e3c8: 0x38401402
-    0xef66e3cc: 0xaa0003f3
-    0xef66e3d0: 0xaa0003f6
-    0xef66e3d4: 0xaa1403e0
-    0xef66e3d8: 0x94005b02
-    0xef66e3dc: 0xeb15027f
-    0xef66e3e0: 0x54ffff03
-    0xef66e3e4: 0x17ffffe3
-21 page fault on 0x1ea1390b9369 at 0xef66e3c8 (read)
-  insn=0x38401402 x0=0x1ea1390b9369 x1=0xefac8ae0 x2=0xefeb75b3 x3=0x22b8fa
-  sp=0xeecc0ed0 x29=0xeecc0ed0 x30=0xef66e3dc brk=0xf0003000
-  x4=0xeecc1a60 x5=0x3 x8=0x40 x9=0xeecc4a80 x10=0x30
-  sp+0x3e8=0xeecc12b8 jit_crashes=0
-  block insns from PC=0xef66e3c8:
-    0xef66e3c8: 0x38401402
-    0xef66e3cc: 0xaa0003f3
-    0xef66e3d0: 0xaa0003f6
-    0xef66e3d4: 0xaa1403e0
-    0xef66e3d8: 0x94005b02
-    0xef66e3dc: 0xeb15027f
-    0xef66e3e0: 0x54ffff03
-    0xef66e3e4: 0x17ffffe3
-21 page fault on 0x1ea1390b936a at 0xef66e3c8 (read)
-  insn=0x38401402 x0=0x1ea1390b936a x1=0xefac8ae0 x2=0xefeb75b3 x3=0x22b8fd
-  sp=0xeecc0ed0 x29=0xeecc0ed0 x30=0xef66e3dc brk=0xf0003000
-  x4=0xeecc1a60 x5=0x3 x8=0x40 x9=0xeecc4a80 x10=0x30
-  sp+0x3e8=0xeecc12b8 jit_crashes=0
-  block insns from PC=0xef66e3c8:
-    0xef66e3c8: 0x38401402
-    0xef66e3cc: 0xaa0003f3
-    0xef66e3d0: 0xaa0003f6
-    0xef66e3d4: 0xaa1403e0
-    0xef66e3d8: 0x94005b02
-    0xef66e3dc: 0xeb15027f
-    0xef66e3e0: 0x54ffff03
-    0xef66e3e4: 0x17ffffe3
-21 page fault on 0x1ea1390b936b at 0xef66e3c8 (read)
-  insn=0x38401402 x0=0x1ea1390b936b x1=0xefac8ae0 x2=0xefeb75b3 x3=0x22b900
-  sp=0xeecc0ed0 x29=0xeecc0ed0 x30=0xef66e3dc brk=0xf0003000
-  x4=0xeecc1a60 x5=0x3 x8=0x40 x9=0xeecc4a80 x10=0x30
-  sp+0x3e8=0xeecc12b8 jit_crashes=0
-  block insns from PC=0xef66e3c8:
-    0xef66e3c8: 0x38401402
-    0xef66e3cc: 0xaa0003f3
-    0xef66e3d0: 0xaa0003f6
-    0xef66e3d4: 0xaa1403e0
-    0xef66e3d8: 0x94005b02
-    0xef66e3dc: 0xeb15027f
-    0xef66e3e0: 0x54ffff03
-    0xef66e3e4: 0x17ffffe3
-21 page fault on 0x1ea1390b936c at 0xef66e3c8 (read)
-  insn=0x38401402 x0=0x1ea1390b936c x1=0xefac8ae0 x2=0xefeb75b3 x3=0x22b903
-  sp=0xeecc0ed0 x29=0xeecc0ed0 x30=0xef66e3dc brk=0xf0003000
-  x4=0xeecc1a60 x5=0x3 x8=0x40 x9=0xeecc4a80 x10=0x30
-  sp+0x3e8=0xeecc12b8 jit_crashes=0
-  block insns from PC=0xef66e3c8:
-    0xef66e3c8: 0x38401402
-    0xef66e3cc: 0xaa0003f3
-    0xef66e3d0: 0xaa0003f6
-    0xef66e3d4: 0xaa1403e0
-    0xef66e3d8: 0x94005b02
-    0xef66e3dc: 0xeb15027f
-    0xef66e3e0: 0x54ffff03
-    0xef66e3e4: 0x17ffffe3
-Terminated
+__JAVA_VERSION_BEGIN
+openjdk version "21.0.10" 2026-01-20
+OpenJDK Runtime Environment (build 21.0.10+7-alpine-r0)
+OpenJDK 64-Bit Server VM (build 21.0.10+7-alpine-r0, interpreted mode)
+__JAVA_VERSION_END
+__JAVA_VERSION_OK
+__JAVA_BUILD:PASS
+__BG_BEGIN:binarytrees
+__BG_TIME:binarytrees:2.10
+__BG_RESULT:binarytrees:PASS:144:4:3398443640:144
+__BG_BEGIN:fannkuchredux
+__BG_TIME:fannkuchredux:2.04
+__BG_RESULT:fannkuchredux:PASS:24:2:3876461884:24
+__BG_BEGIN:fasta
+__BG_TIME:fasta:1.44
+__BG_RESULT:fasta:PASS:1024:18:1840911314:1024
+__BG_BEGIN:knucleotide
+__BG_TIME:knucleotide:5.52
+__BG_RESULT:knucleotide:PASS:100:13:463387513:100
+__BG_BEGIN:mandelbrot
+__BG_TIME:mandelbrot:2.71
+__BG_RESULT:mandelbrot:PASS:1311:2:640347331:1311
+__BG_BEGIN:nbody
+__BG_TIME:nbody:2.80
+__BG_RESULT:nbody:PASS:26:2:980964627:26
+__BG_BEGIN:pidigits
+__BG_TIME:pidigits:2.43
+__BG_RESULT:pidigits:PASS:151:10:3273113594:151
+__BG_BEGIN:regexredux
+__BG_TIME:regexredux:7.37
+__BG_RESULT:regexredux:PASS:263:13:3404323976:263
+__BG_BEGIN:revcomp
+__BG_TIME:revcomp:2.52
+__BG_RESULT:revcomp:PASS:10174:168:2332509513:10174
+__BG_BEGIN:spectralnorm
+__BG_TIME:spectralnorm:3.87
+__BG_RESULT:spectralnorm:PASS:12:1:2938823901:12
+__BG_ALL_DONE
+
 ```
+
+## Notes
+
+- This runner intentionally uses HotSpot interpreter mode (`-Xint -Xshare:off`) for `javac` and benchmark execution.
+- The previous startup blocker was caused by the emulator advertising `DCZID_EL0.DZP=1` while OpenJDK 21 left `VM_Version::_zva_length` at zero and still treated DC ZVA as enabled. ARM64 iSH now reports a 64-byte DC ZVA block and implements `dc zva` zeroing.
+- Default mixed-mode `java -version` and a trivial `java Hello` smoke now work. Default mixed-mode `javac` remains a separate HotSpot/JIT correctness lane; it can still fail in heavier compilation unless forced through `-J-Xint`.

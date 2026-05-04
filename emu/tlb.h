@@ -88,6 +88,7 @@ forceinline __no_instrument void *__tlb_write_ptr(struct tlb *tlb, addr_t addr) 
     return tlb_handle_miss(tlb, addr, MEM_WRITE);
 }
 bool __tlb_write_cross_page(struct tlb *tlb, addr_t addr, const char *value, unsigned size);
+bool __tlb_zero(struct tlb *tlb, addr_t addr, unsigned size);
 forceinline __no_instrument bool tlb_write(struct tlb *tlb, addr_t addr, const void *value, unsigned size) {
     if (PGOFFSET(addr) > PAGE_SIZE - size)
         return __tlb_write_cross_page(tlb, addr, value, size);

@@ -78,6 +78,25 @@ bool __tlb_write_cross_page(struct tlb *tlb, addr_t addr, const char *value, uns
     return true;
 }
 
+bool __tlb_zero(struct tlb *tlb, addr_t addr, unsigned size) {
+    char *ptr1 = __tlb_write_ptr(tlb, addr);
+    if (ptr1 == NULL)
+        return false;
+
+    size_t part1 = PAGE_SIZE - PGOFFSET(addr);
+    if (part1 >= size) {
+        memset(ptr1, 0, size);
+        return true;
+    }
+
+    char *ptr2 = __tlb_write_ptr(tlb, (PAGE(addr) + 1) << PAGE_BITS);
+    if (ptr2 == NULL)
+        return false;
+    memset(ptr1, 0, part1);
+    memset(ptr2, 0, size - part1);
+    return true;
+}
+
 __no_instrument void *tlb_handle_miss(struct tlb *tlb, addr_t addr, int type) {
     char *ptr = mmu_translate(tlb->mmu, TLB_PAGE(addr), type);
     if (tlb->mmu->changes != tlb->mem_changes) {
