@@ -139,7 +139,9 @@ void send_signal(struct task *task, int sig, struct siginfo_ info) {
     if (task->zombie || task->exiting)
         return;
 #ifdef GUEST_ARM64
-    if (sig == SIGTRAP_ || sig == SIGABRT_ || sig == SIGILL_ || sig == SIGSEGV_ || sig == SIGBUS_)
+    extern volatile bool g_trace_faults;
+    if (g_trace_faults &&
+        (sig == SIGTRAP_ || sig == SIGABRT_ || sig == SIGILL_ || sig == SIGSEGV_ || sig == SIGBUS_))
         fprintf(stderr, "SIGNAL_TRACE: sig=%d pc=0x%llx pid=%d\n",
                 sig, (unsigned long long)task->cpu.pc, task->pid);
 #endif

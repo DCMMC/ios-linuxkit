@@ -27,6 +27,7 @@ extern __thread volatile uint64_t jit_last_x7;
 extern __thread volatile uint64_t jit_last_x10;
 extern __thread volatile int jit_crash_count;
 extern volatile bool g_trace_highbits;
+extern volatile bool g_trace_faults;
 
 int fakefs_bind_mount(const char *linux_path, const char *host_path, bool read_only);
 
@@ -220,6 +221,8 @@ int main(int argc, char *const argv[]) {
 #ifdef GUEST_ARM64
     const char *trace_highbits = getenv("ISH_TRACE_HIGHBITS");
     g_trace_highbits = trace_highbits && trace_highbits[0] && strcmp(trace_highbits, "0") != 0;
+    const char *trace_faults = getenv("ISH_TRACE_FAULTS");
+    g_trace_faults = trace_faults && trace_faults[0] && strcmp(trace_faults, "0") != 0;
 #endif
 
     static char altstack[SIGSTKSZ];

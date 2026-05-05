@@ -47,6 +47,9 @@ __thread volatile uint64_t jit_last_host_fault = 0;
 __thread volatile uint64_t jit_last_x7 = 0;
 __thread volatile uint64_t jit_last_x10 = 0;
 __thread volatile int jit_crash_count = 0;
+#ifdef GUEST_ARM64
+volatile bool g_trace_faults = false;
+#endif
 
 void handle_interrupt(int interrupt) {
     struct cpu_state *cpu = &current->cpu;
@@ -468,9 +471,9 @@ void handle_interrupt(int interrupt) {
 #if defined(GUEST_X86) || !defined(GUEST_ARM64)
             printk("%d page fault on 0x%x at 0x%x\n", current->pid, cpu->segfault_addr, cpu->eip);
 #elif defined(GUEST_ARM64)
-            printk("%d page fault on 0x%llx at 0x%llx (%s)\n", current->pid, (unsigned long long)cpu->segfault_addr, (unsigned long long)cpu->pc, cpu->segfault_was_write ? "write" : "read");
-            // Dump instruction bytes and key registers for debugging
-            {
+            if (g_trace_faults) {
+                printk("%d page fault on 0x%llx at 0x%llx (%s)\n", current->pid, (unsigned long long)cpu->segfault_addr, (unsigned long long)cpu->pc, cpu->segfault_was_write ? "write" : "read");
+                // Dump instruction bytes and key registers for debugging
                 uint32_t fault_insn = 0;
                 for (int j = 0; j < 4; j++) {
                     uint8_t b;
