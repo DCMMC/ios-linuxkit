@@ -145,6 +145,7 @@ write_report() {
     local total_count pass_count
     total_count=${#BENCHMARKS[@]}
     pass_count=$(grep -c '^__BG_RESULT:.*:PASS:' "$HOST_TMP/guest.log" || true)
+    safety_status=$(grep -q 'SAFETY-VALVE' "$HOST_TMP/guest.log" && echo FAIL || echo PASS)
     {
         echo "# Benchmarks Game Python smoke report"
         echo
@@ -154,6 +155,7 @@ write_report() {
         echo "- timeout: ${TIMEOUT_S}s"
         echo "- guest workdir: $GUEST_WORK"
         echo "- Result: $pass_count / $total_count passing"
+        echo "- Safety-valve diagnostics: $safety_status"
         echo
         echo "## Selected Python source variants"
         echo
@@ -187,7 +189,7 @@ write_report() {
         echo '```'
     } >"$REPORT"
     echo "report: $REPORT"
-    [ "$pass_count" -eq "$total_count" ]
+    [ "$pass_count" -eq "$total_count" ] && [ "$safety_status" = PASS ]
 }
 
 fetch_sources

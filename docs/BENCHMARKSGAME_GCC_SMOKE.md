@@ -1,12 +1,13 @@
 # Benchmarks Game GCC smoke report
 
-- Timestamp: 2026-05-04T06:48:51+00:00
+- Timestamp: 2026-05-13T14:34:33+00:00
 - ish binary: /workspace/projects/ish-arm64/build-arm64-linux/ish
 - rootfs: /workspace/projects/ish-arm64/alpine-arm64-fakefs
-- timeout: 1200s
+- timeout: 900s
 - guest workdir: /tmp/benchmarksgame-gcc-smoke
 - Build result: 10 / 10 passing
 - Result: 10 / 10 passing
+- Safety-valve diagnostics: PASS
 
 ## Selected GCC source variants
 
@@ -27,15 +28,15 @@
 
 | Benchmark | Status | Bytes | Lines | CRC:Size | Time (s) |
 |---|---:|---:|---:|---|---:|
-| binarytrees | PASS | 144 | 4 | 3398443640:144 | 0.12 |
-| fannkuchredux | PASS | 24 | 2 | 3876461884:24 | 0.07 |
+| binarytrees | PASS | 144 | 4 | 3398443640:144 | 0.14 |
+| fannkuchredux | PASS | 24 | 2 | 3876461884:24 | 0.08 |
 | fasta | PASS | 10245 | 171 | 1573388369:10245 | 0.03 |
-| knucleotide | PASS | 136 | 15 | 2155388821:136 | 0.24 |
-| mandelbrot | PASS | 1261 | 2 | 4144311493:1261 | 0.21 |
+| knucleotide | PASS | 136 | 15 | 2155388821:136 | 0.14 |
+| mandelbrot | PASS | 1261 | 2 | 1467798978:1261 | 0.20 |
 | nbody | PASS | 26 | 2 | 980964627:26 | 0.01 |
-| pidigits | PASS | 151 | 10 | 3273113594:151 | 0.03 |
-| regexredux | PASS | 263 | 13 | 3404323976:263 | 0.19 |
-| revcomp | PASS | 10174 | 168 | 2332509513:10174 | 0.10 |
+| pidigits | PASS | 151 | 10 | 3273113594:151 | 0.01 |
+| regexredux | PASS | 263 | 13 | 3404323976:263 | 0.28 |
+| revcomp | PASS | 10174 | 168 | 2332509513:10174 | 0.08 |
 | spectralnorm | PASS | 12 | 1 | 2938823901:12 | 0.12 |
 
 ## Raw guest log tail
@@ -62,31 +63,31 @@ __BG_BUILD_RESULT:revcomp:PASS
 __BG_BUILD:spectralnorm
 __BG_BUILD_RESULT:spectralnorm:PASS
 __BG_BEGIN:binarytrees
-__BG_TIME:binarytrees:0.12
+__BG_TIME:binarytrees:0.14
 __BG_RESULT:binarytrees:PASS:144:4:3398443640:144
 __BG_BEGIN:fannkuchredux
-__BG_TIME:fannkuchredux:0.07
+__BG_TIME:fannkuchredux:0.08
 __BG_RESULT:fannkuchredux:PASS:24:2:3876461884:24
 __BG_BEGIN:fasta
 __BG_TIME:fasta:0.03
 __BG_RESULT:fasta:PASS:10245:171:1573388369:10245
 __BG_BEGIN:knucleotide
-__BG_TIME:knucleotide:0.24
+__BG_TIME:knucleotide:0.14
 __BG_RESULT:knucleotide:PASS:136:15:2155388821:136
 __BG_BEGIN:mandelbrot
-__BG_TIME:mandelbrot:0.21
-__BG_RESULT:mandelbrot:PASS:1261:2:4144311493:1261
+__BG_TIME:mandelbrot:0.20
+__BG_RESULT:mandelbrot:PASS:1261:2:1467798978:1261
 __BG_BEGIN:nbody
 __BG_TIME:nbody:0.01
 __BG_RESULT:nbody:PASS:26:2:980964627:26
 __BG_BEGIN:pidigits
-__BG_TIME:pidigits:0.03
+__BG_TIME:pidigits:0.01
 __BG_RESULT:pidigits:PASS:151:10:3273113594:151
 __BG_BEGIN:regexredux
-__BG_TIME:regexredux:0.19
+__BG_TIME:regexredux:0.28
 __BG_RESULT:regexredux:PASS:263:13:3404323976:263
 __BG_BEGIN:revcomp
-__BG_TIME:revcomp:0.10
+__BG_TIME:revcomp:0.08
 __BG_RESULT:revcomp:PASS:10174:168:2332509513:10174
 __BG_BEGIN:spectralnorm
 __BG_TIME:spectralnorm:0.12

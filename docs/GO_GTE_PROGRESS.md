@@ -4,7 +4,7 @@ See also: [ARM64 workload smoke tests](ARM64_WORKLOAD_SMOKE_TESTS.md), the centr
 
 Date: 2026-05-02
 Updated: 2026-05-03 05:58 UTC
-Reviewed: 2026-05-12; status remains current in the workload index.
+Reviewed: 2026-05-13; `go test -count=1 ./...` and `make run-go` were revalidated without safety-valve diagnostics in `/workspace/tmp/go-gte-smoke-20260513-1500.log`.
 
 ## Goal
 
@@ -207,6 +207,7 @@ That is a go-gte repository packaging/Makefile issue, not an iSH runtime failure
 - `/workspace/tmp/go-gte-make-run-go-after-fcvtl.log`
 - `/workspace/tmp/go-gte-simd-focused.log`
 - `/workspace/tmp/go-gte-patched-full.log`
+- `/workspace/tmp/go-gte-smoke-20260513-1500.log` — revalidation after the runtime coverage expansion (`go test -count=1 ./...`, `make run-go`, `SAFETY-VALVE` count 0)
 
 ## Next steps
 

@@ -168,6 +168,7 @@ write_report() {
     local total_count pass_count build_count
     total_count=${#BENCHMARKS[@]}
     pass_count=$(grep -c '^__BG_RESULT:.*:PASS:' "$HOST_TMP/guest.log" || true)
+    safety_status=$(grep -q 'SAFETY-VALVE' "$HOST_TMP/guest.log" && echo FAIL || echo PASS)
     build_count=$(grep -c '^__BG_BUILD_RESULT:.*:PASS$' "$HOST_TMP/guest.log" || true)
     {
         echo "# Benchmarks Game G++ smoke report"
@@ -179,6 +180,7 @@ write_report() {
         echo "- guest workdir: $GUEST_WORK"
         echo "- Build result: $build_count / $total_count passing"
         echo "- Result: $pass_count / $total_count passing"
+        echo "- Safety-valve diagnostics: $safety_status"
         echo
         echo "## Selected G++ source variants"
         echo
@@ -212,7 +214,7 @@ write_report() {
         echo '```'
     } >"$REPORT"
     echo "report: $REPORT"
-    [ "$pass_count" -eq "$total_count" ] && [ "$build_count" -eq "$total_count" ]
+    [ "$pass_count" -eq "$total_count" ] && [ "$build_count" -eq "$total_count" ] && [ "$safety_status" = PASS ]
 }
 
 ensure_guest_packages

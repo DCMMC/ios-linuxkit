@@ -19,9 +19,9 @@ A workload belongs here when it exercises at least one of these boundaries:
 
 | Workload | Current status | Why it was chosen | Latest useful log/report |
 |---|---:|---|---|
-| Staged runtime coverage | Passing, 44/44 | Fast regression gate for shell, `apk`, tmp I/O, C, SysV IPC, high-value syscall gap coverage, ARM64 DC ZVA coverage, ARM64 signal-ucontext and per-thread `sigaltstack` coverage, ARM64 CCMP/CCMN NV-condition coverage, ARM64 DMB/DSB/ISB barrier coverage, ARM64 self-modifying-code invalidation coverage, Go, Bun, Node/npm, Python, Lua, Java, Clojure, PyPy/Swift availability probes, Rust, Erlang, and Zig. Catches broad syscall/runtime regressions before heavier probes. | `/workspace/tmp/ish-arm64-runtime-coverage-20260513-072738.md` |
+| Staged runtime coverage | Passing, 44/44 | Fast regression gate for shell, `apk`, tmp I/O, C, SysV IPC, high-value syscall gap coverage, ARM64 DC ZVA coverage, ARM64 signal-ucontext and per-thread `sigaltstack` coverage, ARM64 CCMP/CCMN NV-condition coverage, ARM64 DMB/DSB/ISB barrier coverage, ARM64 self-modifying-code invalidation coverage, Go, Bun, Node/npm, Python, Lua, Java, Clojure, PyPy/Swift availability probes, Rust, Erlang, and Zig. Catches broad syscall/runtime regressions before heavier probes. | `/workspace/tmp/ish-arm64-runtime-coverage-20260513-182526.md` |
 | Bun + PiClaw bootstrap/server | Passing for install/start/web listen | Exercises modern JS runtime behavior: high `mmap` reservations, JSC GC signaling/timers, recursive package/workspace copies, sockets, HTTP serving, and PiClaw's startup probes. | `/workspace/tmp/piclaw-yolo-run-enotsup-fixed.log` and exposed server logs |
-| `rcarmo/go-gte` | Model conversion, `go test ./...`, and `make run-go` passing; `make go-build` still has upstream missing `cmd/test_gte` | Exercises Go toolchain, Python wheels, safetensors/numpy model conversion, 128 MB binary model I/O, FP16→FP32 AdvSIMD conversion, NEON math kernels, and Go runtime scheduling. | `docs/GO_GTE_PROGRESS.md` |
+| `rcarmo/go-gte` | Model conversion, `go test ./...`, and `make run-go` passing; `make go-build` still has upstream missing `cmd/test_gte` | Exercises Go toolchain, Python wheels, safetensors/numpy model conversion, 128 MB binary model I/O, FP16→FP32 AdvSIMD conversion, NEON math kernels, and Go runtime scheduling. | `docs/GO_GTE_PROGRESS.md`, `/workspace/tmp/go-gte-smoke-20260513-1500.log` |
 | Benchmarks Game suite | GCC, G++, Go, Python, Node.js, PHP, Perl, Ruby, and Lua rows passing 10/10; Java-equivalent probe passing 10/10 in default mixed mode and interpreter fallback mode; source/language feasibility mapped | Broad cross-language benchmark corpus covering allocation, recursion, numeric FP, regex/text throughput, big integers, stdout/stdin streams, native compilers, managed runtimes, native compilers, SIMD portability, IPC, shared memory, and package availability. | [BENCHMARKSGAME_MATRIX.md](BENCHMARKSGAME_MATRIX.md), [BENCHMARKSGAME_GCC_SMOKE.md](BENCHMARKSGAME_GCC_SMOKE.md), [BENCHMARKSGAME_GPP_SMOKE.md](BENCHMARKSGAME_GPP_SMOKE.md), [BENCHMARKSGAME_GO_SMOKE.md](BENCHMARKSGAME_GO_SMOKE.md), [BENCHMARKSGAME_PYTHON_SMOKE.md](BENCHMARKSGAME_PYTHON_SMOKE.md), [BENCHMARKSGAME_NODE_SMOKE.md](BENCHMARKSGAME_NODE_SMOKE.md), [BENCHMARKSGAME_PHP_SMOKE.md](BENCHMARKSGAME_PHP_SMOKE.md), [BENCHMARKSGAME_PERL_SMOKE.md](BENCHMARKSGAME_PERL_SMOKE.md), [BENCHMARKSGAME_RUBY_SMOKE.md](BENCHMARKSGAME_RUBY_SMOKE.md), [BENCHMARKSGAME_LUA_SMOKE.md](BENCHMARKSGAME_LUA_SMOKE.md), [BENCHMARKSGAME_JAVA_EQUIVALENT_SMOKE.md](BENCHMARKSGAME_JAVA_EQUIVALENT_SMOKE.md) |
 
 ## Staged runtime coverage
@@ -36,7 +36,7 @@ Latest result:
 
 ```text
 44 / 44 passing
-report: /workspace/tmp/ish-arm64-runtime-coverage-20260513-072738.md
+report: /workspace/tmp/ish-arm64-runtime-coverage-20260513-182526.md
 ```
 
 Why it matters:
@@ -177,10 +177,10 @@ Latest results:
 
 ```text
 GCC: 10 / 10 build, 10 / 10 run
-report: /workspace/tmp/benchmarksgame-gcc-smoke-20260504-064756.md
+report: /workspace/tmp/benchmarksgame-gcc-smoke-20260513-143326.md
 
 G++: 10 / 10 build, 10 / 10 run
-report: /workspace/tmp/benchmarksgame-gpp-smoke-20260504-064900.md
+report: /workspace/tmp/benchmarksgame-gpp-smoke-20260513-143434.md
 ```
 
 These rows compile official native-code variants inside the guest and then run smoke-sized inputs. Architecture-specific x86 SIMD variants (`immintrin.h`, `x86intrin.h`, SSE/AVX intrinsics) are recorded and skipped rather than patched for ARM64. Two Alpine/musl source-environment limitations are also recorded: some threaded `revcomp`/`fasta` variants use large per-thread stack arrays that overflow musl's small default pthread stacks, and `fannkuchredux-gpp-5` relies on `int64_t` without including `<cstdint>`. The rows keep the next official portable variant instead of changing benchmark source.
@@ -197,7 +197,8 @@ Latest result:
 
 ```text
 10 / 10 passing
-report: /workspace/tmp/benchmarksgame-go-smoke-20260510-084223.md
+Safety-valve diagnostics: PASS
+report: /workspace/tmp/benchmarksgame-go-smoke-20260513-144802.md
 ```
 
 The Go row intentionally chooses self-contained official Go variants for the first tier. Faster `pidigits` and `regexredux` variants that require cgo/GMP/PCRE are tracked as a separate cgo/toolchain stress pass. During manual probing, the cgo `pidigits` variant exposed `cc: fatal error: failed to get exit status: Interrupted system call` while compiling `runtime/cgo`; this was fixed by treating the internal 1-second `wait4` poll timeout as a timeout, not as a guest `EINTR`. A later transient `fatal: bad g in signal handler` was traced to process-shared `sigaltstack` state; iSH now stores alternate signal stacks per task/thread, matching Linux and Go runtime expectations. A minimal cgo build and cgo/GMP `pidigits` now compile and run.
@@ -214,7 +215,7 @@ Latest result:
 
 ```text
 10 / 10 passing
-report: /workspace/tmp/benchmarksgame-python-smoke-20260503-072937.md
+report: /workspace/tmp/benchmarksgame-python-smoke-20260513-144843.md
 ```
 
 Issue found and fixed: Python `multiprocessing.SemLock` fails with `FileNotFoundError` when `/dev/shm` is absent from the fakefs root. iSH startup now pre-creates `/dev/shm` with mode `1777`, and the Python row passes without creating it in the harness. Many Linux runtimes assume `/dev/shm` exists even when it is just a regular tmp-capable directory.
@@ -232,7 +233,7 @@ Latest result:
 
 ```text
 10 / 10 passing
-report: /workspace/tmp/benchmarksgame-node-smoke-20260503-073225.md
+report: /workspace/tmp/benchmarksgame-node-smoke-20260513-144925.md
 ```
 
 The first Node.js row intentionally avoids `worker_threads` and external modules such as `mpzjs`, keeping this lane single-process and dependency-free. The skipped worker-thread variants should become a separate scheduler/futex stress lane.
@@ -249,7 +250,7 @@ Latest result:
 
 ```text
 10 / 10 passing
-report: /workspace/tmp/benchmarksgame-perl-smoke-20260503-080129.md
+report: /workspace/tmp/benchmarksgame-perl-smoke-20260513-145010.md
 ```
 
 The first Perl row adapts `pidigits` to use stdlib `Math::BigInt` because Alpine does not package `Math::BigInt::GMP`. The GMP variant remains useful as a separate dependency/native-extension stress lane.
@@ -266,7 +267,7 @@ Latest result:
 
 ```text
 10 / 10 passing
-report: /workspace/tmp/benchmarksgame-ruby-smoke-20260503-141652.md
+report: /workspace/tmp/benchmarksgame-ruby-smoke-20260513-145038.md
 ```
 
 The Ruby row now includes Thread/fork-heavy variants. Manual probing of `regexredux-ruby-3` found a false positive in the poll safety valve while other guest threads were still doing CPU work. iSH now only fires that safety valve when all threads are blocking; the Thread/fork-heavy Ruby row now passes.
@@ -284,7 +285,7 @@ Latest result:
 
 ```text
 10 / 10 passing
-report: /workspace/tmp/benchmarksgame-php-smoke-20260503-161623.md
+report: /workspace/tmp/benchmarksgame-php-smoke-20260513-144957.md
 ```
 
 Issue found and fixed: the fastest official PHP variants use `shmop` and SysV message queues around `pcntl_fork()`. ARM64 iSH had direct `shmget`/`shmctl`/`shmat`/`shmdt` and `msgget`/`msgctl`/`msgrcv`/`msgsnd` as stubs. iSH now implements enough SysV shared memory and message queue semantics for these workloads: shared mappings survive fork as shared pages, `IPC_STAT` reports segment size for PHP `shmop_open()`, and message receives block until forked workers send their result strings.
@@ -301,7 +302,7 @@ Latest result:
 
 ```text
 10 / 10 passing
-report: /workspace/tmp/benchmarksgame-lua-smoke-20260503-161639.md
+report: /workspace/tmp/benchmarksgame-lua-smoke-20260513-145120.md
 ```
 
 The Lua row uses official Lua sources under `lua5.3` because the official GMP-backed `pidigits` variants depend on LGMP, which explicitly supports Lua >= 5.1 and < 5.4. The runner installs/builds LGMP through `luarocks-5.3` and uses Alpine's packaged `lua5.3-rex-pcre2` for official `regexredux`. The first `pidigits-lua-1` alternative is skipped because its `bn` module is not packaged in Alpine.
@@ -320,7 +321,9 @@ Current result:
 Java startup: PASS
 Build result: PASS
 Result: 10 / 10 passing
-report: /workspace/tmp/benchmarksgame-java-equivalent-smoke-20260508-224254.md
+Safety-valve diagnostics: PASS
+report: /workspace/tmp/benchmarksgame-java-equivalent-smoke-20260513-145338.md
+interpreter fallback report: /workspace/tmp/benchmarksgame-java-equivalent-smoke-20260513-145716.md
 ```
 
 The current Benchmarks Game performance pages do not advertise a Java row. The probe therefore generates local Java equivalents for the ten benchmark families. OpenJDK 21 now starts after fixing ARM64 `DCZID_EL0`/`dc zva` handling: ARM64 iSH advertises a 64-byte DC ZVA block and implements the zeroing instruction. The default `javac`/C2 crash was later traced to missing `LDPSW` pair-load sign extension and fixed. The Java-equivalent lane now runs `javac` and benchmark execution in HotSpot default mixed mode by default and passes all ten equivalents; `JAVA_SMOKE_MODE=interpreter` remains available and was revalidated as conservative fallback coverage.

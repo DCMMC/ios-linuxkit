@@ -184,6 +184,7 @@ write_report() {
     local total_count pass_count build_status java_status
     total_count=${#BENCHMARKS[@]}
     pass_count=$(grep -c '^__BG_RESULT:.*:PASS:' "$HOST_TMP/guest.log" || true)
+    safety_status=$(grep -q 'SAFETY-VALVE' "$HOST_TMP/guest.log" && echo FAIL || echo PASS)
     build_status=$(grep -q '^__JAVA_BUILD:PASS$' "$HOST_TMP/guest.log" && echo PASS || echo FAIL)
     java_status=$(grep -q '^__JAVA_VERSION_OK$' "$HOST_TMP/guest.log" && echo PASS || echo FAIL)
     {
@@ -199,6 +200,7 @@ write_report() {
         echo "- Java startup: $java_status"
         echo "- Build result: $build_status"
         echo "- Result: $pass_count / $total_count passing"
+        echo "- Safety-valve diagnostics: $safety_status"
         echo
         echo "## Results"
         echo
@@ -223,7 +225,7 @@ write_report() {
         echo '```'
     } >"$REPORT"
     echo "report: $REPORT"
-    [ "$java_status" = PASS ] && [ "$build_status" = PASS ] && [ "$pass_count" -eq "$total_count" ]
+    [ "$java_status" = PASS ] && [ "$build_status" = PASS ] && [ "$pass_count" -eq "$total_count" ] && [ "$safety_status" = PASS ]
 }
 
 ensure_guest_packages

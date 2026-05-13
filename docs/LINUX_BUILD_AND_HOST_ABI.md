@@ -256,7 +256,7 @@ Directory reads now propagate or infer Linux `DT_*` values:
 
 Validation: a minimal Bun recursive `fs.cpSync` directory tree copy succeeds,
 PiClaw no longer logs the bootstrap `ENOTSUP ... copyfile` warning, and staged
-runtime coverage remains **44 / 44 passing** (`/workspace/tmp/ish-arm64-runtime-coverage-20260513-072738.md`).
+runtime coverage remains **44 / 44 passing** (`/workspace/tmp/ish-arm64-runtime-coverage-20260513-182526.md`).
 
 ## Blocking I/O and exit cleanup
 
