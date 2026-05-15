@@ -5,7 +5,7 @@ Reviewed: 2026-05-15
 
 ## Known-good code
 
-- Code baseline: local `master` at `26bdcb2d` (`mm: isolate arm64 reservation helpers`), successor to tagged validation point `arm64-openjdk21-prod-20260513-r6`; this pass includes expanded language/runtime coverage, ARM64 sysreg/FP16 conversion fixes, bounds-checked path/symlink expansion, guest-signal-aware blocking I/O/exit cleanup, socket ABI hardening through ARM64 `SCM_RIGHTS` control-message validation, `fchmodat2(AT_EMPTY_PATH)` coverage, AI CLI startup coverage, and reservation-aware high-address `MAP_NORESERVE` handling.
+- Code baseline: current local `master`, successor to tagged validation point `arm64-openjdk21-prod-20260513-r6`; this pass includes expanded language/runtime coverage, ARM64 sysreg/FP16 conversion fixes, bounds-checked path/symlink expansion, guest-signal-aware blocking I/O/exit cleanup, socket ABI hardening through ARM64 `SCM_RIGHTS` control-message validation, `fchmodat2(AT_EMPTY_PATH)` coverage, AI CLI startup coverage including community `grok-cli`, and reservation-aware high-address `MAP_NORESERVE` handling.
 - Previous tagged production audit baseline: `arm64-openjdk21-prod-20260513-r6` (post-r5 validation point covering 44/44 staged coverage, Benchmarks Game refresh, Java mixed/interpreter probes, and go-gte smoke; current local `master` adds the later Rust/Cargo, socket ABI, AI CLI, `fchmodat2`, and high-address reservation audit fixes).
 - Branch: `master`.
 - Remote target for this working branch: `https://github.com/rcarmo/ish-arm64.git`; `origin` is configured to this repository for fetch and push.
@@ -50,9 +50,9 @@ Reviewed: 2026-05-15
 - Runtime coverage: `/workspace/tmp/ish-arm64-runtime-coverage-20260515-132014.md`
   - Result: 49 / 49 passing
   - Includes no-safety-valve/no-NETDIAG Rust Cargo/std coverage, Erlang helper-thread cleanup validation, UDP/TCP socket-option and `sendmsg`/`recvmsg`/`SCM_RIGHTS` ABI coverage, `fchmodat2(AT_EMPTY_PATH)` coverage, high-address `MAP_NORESERVE` overlap regression coverage, and Python/Lua/Java/Clojure/PyPy/Swift/Rust/Erlang/Zig smoke or availability coverage.
-- AI CLI runtime coverage: `/workspace/tmp/ish-arm64-ai-cli-runtime-coverage-20260515-132954.md`
-  - Result: 14 / 14 passing on the Alpine npm lane.
-  - Includes unauthenticated install/startup/version/help probes for Claude Code, OpenAI Codex, Pi, GitHub Copilot, OpenCode, and Gemini CLI; Debian AI CLI remains a separate background lane blocked by glibc/libuv thread creation failures.
+- AI CLI runtime coverage: `/workspace/tmp/ish-arm64-ai-cli-runtime-coverage-20260515-191638.md`
+  - Result: 16 / 16 passing on the Alpine npm lane.
+  - Includes unauthenticated install/startup/version/help probes for Claude Code, OpenAI Codex, Pi, GitHub Copilot, OpenCode, Gemini CLI, and community `grok-cli`; Debian AI CLI remains a separate background lane blocked by glibc/libuv thread creation failures.
 - Go Benchmarks Game smoke: `/workspace/tmp/benchmarksgame-go-smoke-20260513-144802.md`
   - Result: 10 / 10 passing
 - Default mixed-mode Java Hello smoke: `/workspace/tmp/java-hello-audit-r5-20260512.log`

@@ -20,7 +20,7 @@ A workload belongs here when it exercises at least one of these boundaries:
 | Workload | Current status | Why it was chosen | Latest useful log/report |
 |---|---:|---|---|
 | Staged runtime coverage | Passing, 49/49 on Alpine | Fast regression gate for shell, `apk`, tmp I/O, C, SysV IPC, high-value syscall gap, `fchmodat2(AT_EMPTY_PATH)`, high-address `MAP_NORESERVE` reservation overlap, UDP/TCP socket-option, and `sendmsg`/`recvmsg`/`SCM_RIGHTS` coverage, ARM64 DC ZVA coverage, ARM64 signal-ucontext and per-thread `sigaltstack` coverage, ARM64 CCMP/CCMN NV-condition coverage, ARM64 DMB/DSB/ISB barrier coverage, ARM64 self-modifying-code invalidation coverage, Go, Bun, Node/npm, Python, Lua, Java, Clojure, PyPy/Swift availability probes, Rust, Erlang, and Zig. Catches broad syscall/runtime regressions before heavier probes. | `/workspace/tmp/ish-arm64-runtime-coverage-20260515-132014.md` |
-| AI CLI runtime coverage | Experimental, Alpine npm lane 14/14 | Separate second-stage matrix for unauthenticated install/startup/version/help probes of Claude Code, OpenAI Codex, Pi, GitHub Copilot, OpenCode, Gemini CLI, and pip-only Mistral Vibe. Kept separate from the core gate because packages are fast-moving and may expose runtime-specific crashes. | `/workspace/tmp/ish-arm64-ai-cli-runtime-coverage-20260515-132954.md` |
+| AI CLI runtime coverage | Experimental, Alpine npm lane 16/16 | Separate second-stage matrix for unauthenticated install/startup/version/help probes of Claude Code, OpenAI Codex, Pi, GitHub Copilot, OpenCode, Gemini CLI, community Grok CLI, and pip-only Mistral Vibe. Kept separate from the core gate because packages are fast-moving and may expose runtime-specific crashes. | `/workspace/tmp/ish-arm64-ai-cli-runtime-coverage-20260515-191638.md` |
 | Bun + PiClaw bootstrap/server | Passing for install/start/web listen | Exercises modern JS runtime behavior: high `mmap` reservations, JSC GC signaling/timers, recursive package/workspace copies, sockets, HTTP serving, and PiClaw's startup probes. | `/workspace/tmp/piclaw-yolo-run-enotsup-fixed.log` and exposed server logs |
 | `rcarmo/go-gte` | Model conversion, `go test ./...`, and `make run-go` passing; `make go-build` still has upstream missing `cmd/test_gte` | Exercises Go toolchain, Python wheels, safetensors/numpy model conversion, 128 MB binary model I/O, FP16→FP32 AdvSIMD conversion, NEON math kernels, and Go runtime scheduling. | `docs/GO_GTE_PROGRESS.md`, `/workspace/tmp/go-gte-smoke-20260513-1500.log` |
 | Benchmarks Game suite | GCC, G++, Go, Python, Node.js, PHP, Perl, Ruby, and Lua rows passing 10/10; Java-equivalent probe passing 10/10 in default mixed mode and interpreter fallback mode; source/language feasibility mapped | Broad cross-language benchmark corpus covering allocation, recursion, numeric FP, regex/text throughput, big integers, stdout/stdin streams, native compilers, managed runtimes, native compilers, SIMD portability, IPC, shared memory, and package availability. | [BENCHMARKSGAME_MATRIX.md](BENCHMARKSGAME_MATRIX.md), [BENCHMARKSGAME_GCC_SMOKE.md](BENCHMARKSGAME_GCC_SMOKE.md), [BENCHMARKSGAME_GPP_SMOKE.md](BENCHMARKSGAME_GPP_SMOKE.md), [BENCHMARKSGAME_GO_SMOKE.md](BENCHMARKSGAME_GO_SMOKE.md), [BENCHMARKSGAME_PYTHON_SMOKE.md](BENCHMARKSGAME_PYTHON_SMOKE.md), [BENCHMARKSGAME_NODE_SMOKE.md](BENCHMARKSGAME_NODE_SMOKE.md), [BENCHMARKSGAME_PHP_SMOKE.md](BENCHMARKSGAME_PHP_SMOKE.md), [BENCHMARKSGAME_PERL_SMOKE.md](BENCHMARKSGAME_PERL_SMOKE.md), [BENCHMARKSGAME_RUBY_SMOKE.md](BENCHMARKSGAME_RUBY_SMOKE.md), [BENCHMARKSGAME_LUA_SMOKE.md](BENCHMARKSGAME_LUA_SMOKE.md), [BENCHMARKSGAME_JAVA_EQUIVALENT_SMOKE.md](BENCHMARKSGAME_JAVA_EQUIVALENT_SMOKE.md) |
@@ -60,16 +60,17 @@ make test-arm64-ai-cli-npm-runtime-coverage \
 Current status:
 
 ```text
-14 / 14 passing
-report: /workspace/tmp/ish-arm64-ai-cli-runtime-coverage-20260515-132954.md
+16 / 16 passing
+report: /workspace/tmp/ish-arm64-ai-cli-runtime-coverage-20260515-191638.md
 ```
 
 Important findings:
 
-- Codex, Pi help, GitHub Copilot, OpenCode `help`, and Gemini startup/help paths run in the Alpine npm lane.
+- Codex, Pi help, GitHub Copilot, OpenCode `help`, Gemini startup/help, and community `grok-cli` startup/help paths run in the Alpine npm lane.
 - OpenCode's `--help` path can hang under iSH/Alpine, but the equivalent `opencode help` command prints usage and exits; the harness probes that subcommand first.
 - Pi's optional `koffi` dependency probes a prebuilt native module during install and can emit an illegal-instruction diagnostic even though npm treats the optional dependency as skippable. The harness now installs Pi with `--omit=optional` for this unauthenticated startup smoke while still running `pi --help`.
 - Claude Code's standalone Bun binary now passes the unauthenticated version smoke. The crash was caused by high-address `MAP_NORESERVE` reservations being invisible to high-hole allocation and later alignment checks, allowing medium JSC/Bun mappings to overlap an existing lazy reservation.
+- Community `grok-cli` is not an official xAI package. It depends on `keytar`, so the Alpine harness installs `libsecret-dev`/build tooling and source-builds the native module to avoid glibc prebuilt relocation failures.
 - Debian AI CLI is tracked as a separate lane but remains blocked by glibc/threading failures (`pthread_create()`/libuv assertions), not by package-manager harness logic.
 
 ## Bun + PiClaw workload

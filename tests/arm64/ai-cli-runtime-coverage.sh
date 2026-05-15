@@ -297,6 +297,7 @@ This second runtime coverage set installs AI coding/LLM CLIs through npm/node an
 | GitHub Copilot | \`@github/copilot\` | \`copilot\` | GitHub Copilot npm CLI package. |
 | OpenCode | \`opencode-ai\` | \`opencode\` | Official OpenCode npm package. |
 | Gemini CLI | \`@google/gemini-cli\` | \`gemini\` | Official Google Gemini CLI npm package. |
+| Grok CLI | \`grok-cli\` | \`grok\` | Community Grok/xAI proxy wrapper that launches Claude Code; npm package source-builds \`keytar\` under Alpine. |
 
 ## Results
 
@@ -312,6 +313,8 @@ install_and_smoke_npm() {
     local bin="$3"
     local dir="$GUEST_WORK/npm/$slug"
     local smoke_env=""
+    local preinstall=""
+    local install_env=""
     if [ "$slug" = opencode ]; then
         smoke_env="if [ -x '$dir/node_modules/opencode-linux-arm64-musl/bin/opencode' ]; then export OPENCODE_BIN_PATH='$dir/node_modules/opencode-linux-arm64-musl/bin/opencode'; fi;"
     elif [ "$slug" = gemini-cli ]; then
@@ -326,8 +329,15 @@ install_and_smoke_npm() {
         # smoke so diagnostics stay strict and the real `pi --help` path remains
         # covered.
         install_flags="$install_flags --omit=optional"
+    elif [ "$slug" = grok-cli ]; then
+        # `grok-cli` depends on `keytar`; the npm prebuilt aarch64 binary targets
+        # glibc and fails under Alpine/musl with unsupported relocations. Install
+        # the keytar/libsecret build dependencies and force a local native build
+        # so the unauthenticated `grok --help` path can run cleanly.
+        preinstall="if command -v apk >/dev/null 2>&1; then apk add --no-cache libsecret-dev make g++ python3 pkgconf >/dev/null; elif command -v apt-get >/dev/null 2>&1; then export DEBIAN_FRONTEND=noninteractive; apt-get update >/dev/null 2>&1 || true; apt-get install -y libsecret-1-dev build-essential python3 pkg-config >/dev/null; fi;"
+        install_env="npm_config_build_from_source=true"
     fi
-    run_install_test npm "$slug install $pkg" "rm -rf '$dir' && mkdir -p '$dir' && cd '$dir' && npm init -y >/dev/null && npm install $install_flags '$pkg'"
+    run_install_test npm "$slug install $pkg" "$preinstall rm -rf '$dir' && mkdir -p '$dir' && cd '$dir' && npm init -y >/dev/null && $install_env npm install $install_flags '$pkg'"
     if [ "$slug" = claude-code ]; then
         run_test npm "$slug smoke $bin" "cd '$dir' && PATH=\"\$PWD/node_modules/.bin:\$PATH\" '$GUEST_WORK/helper/smoke-bin.sh' '$bin'"
     elif [ "$slug" = github-copilot ]; then
@@ -407,6 +417,7 @@ run_lane() {
     run_tool_matrix github-copilot "@github/copilot" copilot
     run_tool_matrix opencode "opencode-ai" opencode
     run_tool_matrix gemini-cli "@google/gemini-cli" gemini
+    run_tool_matrix grok-cli "grok-cli" grok
 }
 
 main() {

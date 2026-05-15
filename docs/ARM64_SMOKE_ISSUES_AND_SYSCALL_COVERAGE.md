@@ -23,7 +23,7 @@ The current ARM64 Linux-host fakefs is in a good core-runtime state:
 | PHP Benchmarks Game | Fast official PHP variants failed in `shmop_*()` and `msg_*()` calls. | ARM64 direct SysV shared memory and message queue syscalls were stubs. | **Fixed**: implemented enough `shmget`/`shmctl`/`shmat`/`shmdt` and `msgget`/`msgctl`/`msgsnd`/`msgrcv` for forked worker result passing. Runtime coverage now includes a C SysV IPC across-`fork()` test. |
 | Bun/PiClaw smoke | Bun recursive copy attempted file-copy on directories and hit `ENOTSUP`. | `getdents64` returned `DT_UNKNOWN` instead of directory entry types. | **Fixed**: directory entry `d_type` is now reported. |
 | Bun/JSC smoke | Bun allocator/free-list crashes around high heap/cage mappings. | ARM64 fault retry was imprecise for translated load/store blocks; high mmap hints were also mishandled. | **Fixed**: precise memory-fault retry PC and high-address ARM64 mmap handling. |
-| Claude Code / Bun standalone AI CLI | Unauthenticated `claude --version` could crash after large high-address lazy reservations. | Large `MAP_NORESERVE` reservations were invisible to high-hole allocation/alignment checks, allowing later medium Bun/JSC mappings to overlap an existing lazy reservation. | **Fixed**: high-hole allocation, caller hints, and alignment checks are reservation-aware; Alpine npm AI CLI coverage is 14/14. |
+| Claude Code / Bun standalone AI CLI | Unauthenticated `claude --version` could crash after large high-address lazy reservations. | Large `MAP_NORESERVE` reservations were invisible to high-hole allocation/alignment checks, allowing later medium Bun/JSC mappings to overlap an existing lazy reservation. | **Fixed**: high-hole allocation, caller hints, and alignment checks are reservation-aware; Alpine npm AI CLI coverage is 16/16. |
 | Bun/JSC smoke | `bun -e`, timers, and server startup could stall. | JSC parallel/concurrent GC uses signal coordination patterns that exposed iSH scheduling/signal-delivery limits. | **Mitigated correctly for this runtime**: ARM64 guest shim constrains JSC to one marker and disables concurrent GC. |
 | go-gte workload | Model conversion trapped on AdvSIMD FP widening conversion. | Missing ARM64 `FCVTL`/`FCVTL2` instruction coverage. | **Fixed**: H→S and S→D widening conversion handlers added. |
 | GCC/G++ Benchmarks Game | Several fastest native variants include `immintrin.h`, `x86intrin.h`, SSE, or AVX intrinsics. | Official source is x86-specific, not portable C/C++ and not an ARM64 emulation bug. | **Accounted for, not patched**: rows record these alternatives and select the next official portable source. |
@@ -176,7 +176,7 @@ This pass also fixed robustness issues exposed by the broader toolchain set: pat
 
 ## 2026-05-15 AI CLI and high-address reservation audit
 
-The separate AI CLI runtime suite validates unauthenticated install/startup/version/help probes for Claude Code, OpenAI Codex, Pi, GitHub Copilot, OpenCode, and Gemini CLI. The latest Alpine npm lane report is `/workspace/tmp/ish-arm64-ai-cli-runtime-coverage-20260515-132954.md` with **14 / 14 passing**.
+The separate AI CLI runtime suite validates unauthenticated install/startup/version/help probes for Claude Code, OpenAI Codex, Pi, GitHub Copilot, OpenCode, Gemini CLI, and community `grok-cli`. The latest Alpine npm lane report is `/workspace/tmp/ish-arm64-ai-cli-runtime-coverage-20260515-191638.md` with **16 / 16 passing**.
 
 This audit closed two runtime correctness issues found while isolating Claude/Bun startup failures:
 
@@ -184,3 +184,5 @@ This audit closed two runtime correctness issues found while isolating Claude/Bu
 - High-address lazy `MAP_NORESERVE` reservations are now visible to high-hole allocation, caller-hint rejection, and alignment checks. This prevents later medium Bun/JSC mappings from overlapping an existing reservation; the staged runtime suite covers this with a deliberately misaligned large reservation plus a follow-on medium mapping.
 
 The helper cleanup also keeps ARM64-only reservation handling behind `GUEST_ARM64` in common memory paths; an x86 audit object build confirmed `kernel_memory.c.o` compiles without leaking ARM64 reservation fields into the x86 `struct mem` layout.
+
+The `grok-cli` row is deliberately documented as a community wrapper rather than an official xAI CLI. Its `keytar` dependency needs a source build on Alpine/musl, so the harness installs `libsecret-dev` and native build tooling before npm install; the unauthenticated `grok --help` path then exits cleanly.

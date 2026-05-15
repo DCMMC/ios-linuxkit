@@ -307,8 +307,8 @@ to debug, not as cases to skip.
 Current Linux-host status from this pass:
 
 - Latest staged run: **49 / 49 passing** (`/workspace/tmp/ish-arm64-runtime-coverage-20260515-132014.md`, `TIMEOUT_S=180`, `INSTALL_TIMEOUT_S=300`).
-- Latest Alpine npm AI CLI run: **14 / 14 passing** (`/workspace/tmp/ish-arm64-ai-cli-runtime-coverage-20260515-132954.md`, unauthenticated install/startup/version/help probes).
-- Production package baseline: [docs/ARM64_PRODUCTION_BASELINE.md](docs/ARM64_PRODUCTION_BASELINE.md) (`alpine-arm64-fakefs` on Alpine 3.23.4 with OpenJDK 21.0.10_p7-r0; local audit baseline `master` at `26bdcb2d`, after tagged validation point `arm64-openjdk21-prod-20260513-r6`; `origin` is configured for `rcarmo/ish-arm64`).
+- Latest Alpine npm AI CLI run: **16 / 16 passing** (`/workspace/tmp/ish-arm64-ai-cli-runtime-coverage-20260515-191638.md`, unauthenticated install/startup/version/help probes, including community `grok-cli`).
+- Production package baseline: [docs/ARM64_PRODUCTION_BASELINE.md](docs/ARM64_PRODUCTION_BASELINE.md) (`alpine-arm64-fakefs` on Alpine 3.23.4 with OpenJDK 21.0.10_p7-r0; current local `master` after tagged validation point `arm64-openjdk21-prod-20260513-r6`; `origin` is configured for `rcarmo/ish-arm64`).
 - Non-trivial workload probes are grouped in [docs/ARM64_WORKLOAD_SMOKE_TESTS.md](docs/ARM64_WORKLOAD_SMOKE_TESTS.md): Bun/PiClaw, `rcarmo/go-gte`, and the Benchmarks Game rows.
 - C coverage is green: `gcc --version`, compile, and execute all pass.
 - SysV IPC coverage is green: shared memory and message queues work across `fork()`.
@@ -349,7 +349,7 @@ Current Linux-host status from this pass:
   high mappings; silently relocating these reservations into low memory corrupts
   allocator metadata.
 - Large anonymous `MAP_NORESERVE` arenas are now placed in the high 48-bit address space first, instead of burning the low 4GB mmap window. This removes Bun/JSC startup `ENOMEM` on repeated 1-8GB arena probes.
-- High-address lazy reservations are now visible to high-hole allocation, caller-hint rejection, and alignment checks. This prevents later medium Bun/JSC mappings from overlapping an existing `MAP_NORESERVE` reservation and is covered by the staged runtime gate plus the 14/14 Alpine npm AI CLI smoke lane.
+- High-address lazy reservations are now visible to high-hole allocation, caller-hint rejection, and alignment checks. This prevents later medium Bun/JSC mappings from overlapping an existing `MAP_NORESERVE` reservation and is covered by the staged runtime gate plus the 16/16 Alpine npm AI CLI smoke lane.
 - ARM64 `fchmodat2` syscall 452 is wired and covered, including `AT_EMPTY_PATH` on both an open fd and `AT_FDCWD`/current directory.
 - Fixed the pair-exclusive `STXP/STLXP` gadget clobbering `_pc` (`x28`) while
   loading the expected high word. The standalone `tests/arm64/atomics/ldxp-stlxp.c` now covers both 64-bit and 32-bit pair exclusives and passes.
