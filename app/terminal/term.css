@@ -1,11 +1,25 @@
+html,
 body {
     margin: 0;
+    width: 100%;
+    height: 100%;
     background: transparent;
     overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: text;
+    user-select: text;
 }
 
 #terminal {
     position: absolute;
-    top: 0; bottom: 0;
-    left: 0; right: 0;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    overflow: hidden;
+    background: transparent;
+}
+
+#terminal canvas {
+    display: block;
 }

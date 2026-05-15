@@ -1,0 +1,11 @@
+ghostty-web vendored from https://github.com/rcarmo/ghostty-web
+Commit: b6b243d7f380f8307e375719968f6046f1102c48
+Version: 0.8.1
+
+Vendored files:
+- ghostty-web.js: ESM browser bundle used by app/terminal/term.js
+- ghostty-vt.wasm: upstream Ghostty VT WebAssembly module fallback
+
+The JS bundle embeds the WASM as a data: URL fallback, but the standalone WASM
+is also bundled so WKWebView can load ./ghostty-vt.wasm if data: fetches are
+restricted on a specific iOS/WebKit release.
