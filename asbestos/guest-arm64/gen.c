@@ -930,7 +930,22 @@ int gen_step(struct gen_state *state, struct tlb *tlb) {
     }
     state->last_insn = insn;
 
-    // Handle a small subset of SVE/SVE2 instructions (modeled as 128-bit vectors)
+    // Handle a small subset of SVE/SVE2 instructions (modeled as 128-bit vectors).
+    // Some PyPI musllinux aarch64 wheels contain unguarded SVE CNT* probes even
+    // though the guest does not advertise SVE. Model a conservative 128-bit VL
+    // so those probes can continue through baseline code paths.
+    // SVE CNTB/CNTH/CNTW/CNTD Xdn, pattern, MUL #imm
+    if ((insn & 0xff30e000) == 0x0420e000) {
+        uint32_t rd = insn & 0x1f;
+        uint32_t size = (insn >> 22) & 0x3; // 0=B, 1=H, 2=W, 3=D
+        uint32_t mul = ((insn >> 16) & 0xf) + 1;
+        uint32_t count = (16u >> size) * mul;
+        if (rd != 31) {
+            gen(state, (unsigned long) gadget_movz);
+            gen(state, rd | ((uint64_t)count << 16) | (1ULL << 32));
+        }
+        return 1;
+    }
     // SVE EOR Zd.D, Zn.D, Zm.D
     if ((insn & 0xffe0fc00) == 0x04a03000) {
         uint32_t rd = insn & 0x1f;
@@ -4320,6 +4335,49 @@ static int gen_simd_fp(struct gen_state *state, uint32_t insn) {
         uint32_t rn = (insn >> 5) & 0x1f;
         gen(state, (unsigned long) gadget_mov_v_to_gpr);
         gen(state, rd | (rn << 8));
+        return 1;
+    }
+
+    // SMOV (to general) - extract vector element to GPR with sign extension
+    // Matches: 0Q001110 0imm5 0 01011 Rn Rd
+    if ((insn & 0xbfe0fc00) == 0x0e002c00) {
+        uint32_t Q = (insn >> 30) & 1;
+        uint32_t imm5 = (insn >> 16) & 0x1f;
+        uint32_t rn = (insn >> 5) & 0x1f;
+        uint32_t rd = insn & 0x1f;
+
+        int elem_size = -1;
+        if (imm5 & 0x1) elem_size = 0;       // B
+        else if (imm5 & 0x2) elem_size = 1;  // H
+        else if (imm5 & 0x4) elem_size = 2;  // S
+
+        if (elem_size < 0 || (elem_size == 2 && !Q)) {
+            gen_interrupt(state, INT_UNDEFINED);
+            return 0;
+        }
+
+        uint32_t index = imm5 >> (elem_size + 1);
+        uint32_t max_elems = 16u >> elem_size;
+        if (index >= max_elems) {
+            gen_interrupt(state, INT_UNDEFINED);
+            return 0;
+        }
+
+        gen(state, (unsigned long) gadget_umov_vec_to_gpr);
+        gen(state, rd | (rn << 8) | (elem_size << 16) | (index << 20));
+        gen(state, (unsigned long) gadget_load_reg);
+        gen(state, rd);
+        if (elem_size == 0) {
+            gen(state, (unsigned long) gadget_sxtb);
+            gen(state, Q);
+        } else if (elem_size == 1) {
+            gen(state, (unsigned long) gadget_sxth);
+            gen(state, Q);
+        } else {
+            gen(state, (unsigned long) gadget_sxtw);
+        }
+        gen(state, (unsigned long) gadget_store_reg);
+        gen(state, rd);
         return 1;
     }
 

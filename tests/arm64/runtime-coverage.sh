@@ -6,6 +6,8 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 ISH_BIN="${ISH_BIN:-$PROJECT_DIR/build-arm64-linux/ish}"
 ROOTFS="${ROOTFS:-$PROJECT_DIR/alpine-arm64-fakefs}"
+ROOTFS_LANES="${ROOTFS_LANES:-default=$ROOTFS}"
+LANE_NAME="${LANE_NAME:-default}"
 TIMEOUT_S="${TIMEOUT_S:-120}"
 INSTALL_TIMEOUT_S="${INSTALL_TIMEOUT_S:-1200}"
 REPORT_DIR="${REPORT_DIR:-/workspace/tmp}"
@@ -49,7 +51,7 @@ append_row() {
     local name="$2"
     local status="$3"
     local detail="$4"
-    REPORT_ROWS+="| $stage | $name | $status | ${detail//$'\n'/<br>} |"$'\n'
+    REPORT_ROWS+="| $LANE_NAME | $stage | $name | $status | ${detail//$'\n'/<br>} |"$'\n'
 }
 
 run_test() {
@@ -59,7 +61,7 @@ run_test() {
     local out="$HOST_TMP/test.out"
 
     TOTAL_COUNT=$((TOTAL_COUNT + 1))
-    printf '[%s] %s ... ' "$stage" "$name"
+    printf '[%s/%s] %s ... ' "$LANE_NAME" "$stage" "$name"
     if guest_capture "$cmd" >"$out" 2>&1 && grep -q '^__ISH_STATUS:0$' "$out" && ! grep -q 'SAFETY-VALVE' "$out"; then
         PASS_COUNT=$((PASS_COUNT + 1))
         echo "PASS"
@@ -72,30 +74,63 @@ run_test() {
 }
 
 ensure_guest_basics() {
-    log "Ensuring fakefs DNS/apk basics"
+    log "[$LANE_NAME] Ensuring fakefs DNS/package-manager basics"
     local out="$HOST_TMP/install.out"
-    guest_capture_install "test -f /etc/resolv.conf || echo 'nameserver 1.1.1.1' > /etc/resolv.conf; sed -i 's|https://|http://|g' /etc/apk/repositories 2>/dev/null || true; mkdir -p '$GUEST_WORK'" >"$out" 2>&1
+    guest_capture_install "test -f /etc/resolv.conf || echo 'nameserver 1.1.1.1' > /etc/resolv.conf; if [ -f /etc/apk/repositories ]; then sed -i 's|https://|http://|g' /etc/apk/repositories 2>/dev/null || true; fi; mkdir -p '$GUEST_WORK'" >"$out" 2>&1
+    grep -q '^__ISH_STATUS:0$' "$out"
+}
+
+detect_platform() {
+    local out="$HOST_TMP/platform.out"
+    guest_capture "if command -v apk >/dev/null 2>&1; then echo alpine; elif command -v apt-get >/dev/null 2>&1; then echo debian; else echo unknown; fi" >"$out" 2>&1 || true
+    grep -Ev '^__ISH_STATUS:' "$out" | tail -1
+}
+
+package_for_platform() {
+    local pkg_spec="$1"
+    local platform="$2"
+    local alpine_pkg debian_pkg
+    alpine_pkg="${pkg_spec%%|*}"
+    if [ "$alpine_pkg" = "$pkg_spec" ]; then
+        debian_pkg="$pkg_spec"
+    else
+        debian_pkg="${pkg_spec#*|}"
+    fi
+    if [ "$platform" = debian ]; then
+        printf '%s\n' "$debian_pkg"
+    else
+        printf '%s\n' "$alpine_pkg"
+    fi
+}
+
+install_guest_packages() {
+    if (($# == 0)); then
+        return
+    fi
+    local out="$HOST_TMP/pkg-install.out"
+    log "[$LANE_NAME] Installing guest packages: $*"
+    guest_capture_install "if command -v apk >/dev/null 2>&1; then apk update >/dev/null 2>&1 && apk add --no-cache $*; elif command -v apt-get >/dev/null 2>&1; then export DEBIAN_FRONTEND=noninteractive; apt-get update >/dev/null 2>&1 || true; apt-get install -y $*; else echo 'no supported guest package manager' >&2; exit 127; fi" >"$out" 2>&1
     grep -q '^__ISH_STATUS:0$' "$out"
 }
 
 ensure_tools() {
+    local platform
+    platform="$(detect_platform)"
     local missing=()
-    local spec pkg cmd
+    local spec pkg_spec pkg cmd
     for spec in "$@"; do
-        pkg="${spec%%:*}"
+        pkg_spec="${spec%%:*}"
         cmd="${spec#*:}"
-        [ "$cmd" = "$spec" ] && cmd="$pkg"
+        [ "$cmd" = "$spec" ] && cmd="$(package_for_platform "$pkg_spec" "$platform")"
         local out="$HOST_TMP/ensure-tool.out"
         guest_capture "command -v $cmd >/dev/null 2>&1" >"$out" 2>&1 || true
         if ! grep -q '^__ISH_STATUS:0$' "$out"; then
+            pkg="$(package_for_platform "$pkg_spec" "$platform")"
             missing+=("$pkg")
         fi
     done
     if ((${#missing[@]} > 0)); then
-        log "Installing guest packages: ${missing[*]}"
-        local out="$HOST_TMP/apk.out"
-        guest_capture_install "apk update >/dev/null 2>&1 && apk add --no-cache ${missing[*]}" >"$out" 2>&1
-        grep -q '^__ISH_STATUS:0$' "$out"
+        install_guest_packages "${missing[@]}"
     fi
 }
 
@@ -796,7 +831,7 @@ write_report() {
 
 - Timestamp: $(date -Is)
 - ish binary: $ISH_BIN
-- rootfs: $ROOTFS
+- rootfs lanes: $ROOTFS_LANES
 - timeout: ${TIMEOUT_S}s
 - install timeout: ${INSTALL_TIMEOUT_S}s
 
@@ -808,24 +843,26 @@ write_report() {
 
 ## Results
 
-| Stage | Test | Status | Detail |
-|---|---|---|---|
+| Lane | Stage | Test | Status | Detail |
+|---|---|---|---|---|
 $REPORT_ROWS
 EOF
 }
 
-main() {
-    [ -x "$ISH_BIN" ] || { echo "missing ish binary: $ISH_BIN" >&2; exit 1; }
-    [ -d "$ROOTFS" ] || { echo "missing rootfs: $ROOTFS" >&2; exit 1; }
+run_lane() {
+    LANE_NAME="$1"
+    ROOTFS="$2"
+
+    [ -d "$ROOTFS" ] || { echo "missing rootfs for lane $LANE_NAME: $ROOTFS" >&2; return 1; }
 
     ensure_guest_basics
 
     run_test base "shell" "echo shell-ok | grep -qx shell-ok"
-    run_test base "apk" "apk --version >/dev/null 2>&1"
+    run_test base "package manager" "if command -v apk >/dev/null 2>&1; then apk --version >/dev/null 2>&1; elif command -v apt-get >/dev/null 2>&1; then apt-get --version >/dev/null 2>&1; else exit 127; fi"
     run_test base "tmp file io" "echo file-ok > '$GUEST_WORK/base.txt' && grep -qx file-ok '$GUEST_WORK/base.txt'"
     run_test base "symlink retarget normalization" "mkdir -p '$GUEST_WORK/path-cache' && cd '$GUEST_WORK/path-cache' && echo old > old.txt && echo new > new.txt && ln -sf old.txt current && grep -qx old current && ln -sf new.txt current && grep -qx new current"
 
-    ensure_tools build-base:gcc
+    ensure_tools 'build-base|gcc:gcc'
     prepare_c_fixture
     run_test c "gcc version" "gcc --version | head -1"
     run_test c "compile + run" "cd '$GUEST_WORK/c' && gcc -O0 hello.c -o hello && ./hello | grep -q '^c-runtime-ok '"
@@ -838,7 +875,7 @@ main() {
     run_test c "arm64 barriers DMB/DSB/ISB" "cd '$GUEST_WORK/c' && gcc -O0 barriers.c -o barriers && ./barriers | grep -qx barriers-ok"
     run_test c "arm64 self-modifying code invalidation" "cd '$GUEST_WORK/c' && gcc -O0 smc.c -o smc && ./smc | grep -qx 'smc 1 2'"
 
-    ensure_tools go
+    ensure_tools 'go|golang-go:go'
     prepare_go_fixture
     run_test go "version" "go version"
     run_test go "env" "go env GOARCH GOOS GOROOT"
@@ -861,7 +898,7 @@ main() {
     run_test node "npm version" "npm --version"
     run_test node "node run" "cd '$GUEST_WORK/node' && npm run --silent start | grep -qx node-runtime-ok"
 
-    ensure_tools python3 lua5.4 openjdk21-jdk:javac clojure
+    ensure_tools python3 lua5.4 'openjdk21-jdk|openjdk-21-jdk:javac' clojure
     run_test python "python3 version" "python3 --version"
     run_test python "python3 eval" "python3 -c 'print(\"python-runtime-ok\", sum(range(10)))' | grep -qx 'python-runtime-ok 45'"
     run_test lua "lua5.4 version" "lua5.4 -v"
@@ -869,10 +906,10 @@ main() {
     run_test java "javac + java" "cd '$GUEST_WORK' && printf '%s\n' 'public class Hello { public static void main(String[] args) { System.out.println(\"java-runtime-ok\"); } }' > Hello.java && javac Hello.java && java -cp . Hello | grep -qx java-runtime-ok"
     run_test java "java interpreter fallback" "cd '$GUEST_WORK' && java -Xint -cp . Hello | grep -qx java-runtime-ok"
     run_test clojure "clojure.main eval" "java -cp /usr/share/clojure/clojure.jar clojure.main -e '(println \"clojure-runtime-ok\" (+ 1 2 3))' | grep -qx 'clojure-runtime-ok 6'"
-    run_test pypy "availability probe" "if command -v pypy3 >/dev/null 2>&1; then pypy3 -c 'print(\"pypy-runtime-ok\")' | grep -qx pypy-runtime-ok; else ! apk search pypy | grep -E '(^|-)pypy3?(-|$)' && echo pypy-unavailable-alpine-aarch64; fi"
-    run_test swift "availability probe" "if command -v swift >/dev/null 2>&1; then swift --version; elif command -v swiftc >/dev/null 2>&1; then swiftc --version; else ! apk search swift | grep -E '(^|-)swift(c)?(-|$)' && echo swift-unavailable-alpine-aarch64; fi"
+    run_test pypy "availability probe" "if command -v pypy3 >/dev/null 2>&1; then pypy3 -c 'print(\"pypy-runtime-ok\")' | grep -qx pypy-runtime-ok; elif command -v apk >/dev/null 2>&1; then ! apk search pypy | grep -E '(^|-)pypy3?(-|$)' && echo pypy-unavailable-alpine-aarch64; elif command -v apt-cache >/dev/null 2>&1; then ! apt-cache search '^pypy3?$' | grep -E '(^|-)pypy3?(-|$)' && echo pypy-unavailable-debian-arm64; else echo pypy-unavailable; fi"
+    run_test swift "availability probe" "if command -v swift >/dev/null 2>&1; then swift --version; elif command -v swiftc >/dev/null 2>&1; then swiftc --version; elif command -v apk >/dev/null 2>&1; then ! apk search swift | grep -E '(^|-)swift(c)?(-|$)' && echo swift-unavailable-alpine-aarch64; elif command -v apt-cache >/dev/null 2>&1; then ! apt-cache search '^swift(c)?$' | grep -E '(^|-)swift(c)?(-|$)' && echo swift-unavailable-debian-arm64; else echo swift-unavailable; fi"
 
-    ensure_tools rust:rustc cargo
+    ensure_tools 'rust|rustc:rustc' cargo
     prepare_rust_fixture
     run_test rust "rustc version" "rustc --version"
     run_test rust "rustc compile + run" "cd '$GUEST_WORK/rust' && rustc hello.rs -o rustc_app && ./rustc_app | grep -qx 'rustc-runtime-ok 5050 10100'"
@@ -882,7 +919,7 @@ main() {
     run_test rust "cargo run" "cd '$GUEST_WORK/rust' && cargo run --quiet | grep -q '^rust-runtime-ok 9534429477999140727 500500 rust-channel-ok rust-file-ok pong rust-child-ok$'"
     run_test rust "cargo test" "cd '$GUEST_WORK/rust' && RUST_TEST_THREADS=1 cargo test --quiet --jobs 1"
 
-    ensure_tools erlang:erl
+    ensure_tools 'erlang|erlang-base:erl'
     prepare_erlang_fixture
     run_test erlang "erl version" "erl -version 2>&1 | grep -q 'BEAM.*emulator version'"
 
@@ -891,6 +928,21 @@ main() {
     run_test zig "zig version" "zig version"
     run_test zig "zig build-obj" "cd '$GUEST_WORK/zig' && zig build-obj main.zig -O Debug -femit-bin=zig_runtime.o && test -s zig_runtime.o"
     run_test zig "zig object link + run" "cd '$GUEST_WORK/zig' && zig build-obj main.zig -O Debug -femit-bin=zig_runtime.o && gcc harness.c zig_runtime.o -o zig_app && ./zig_app | grep -q '^zig-runtime-ok '"
+
+}
+
+main() {
+    [ -x "$ISH_BIN" ] || { echo "missing ish binary: $ISH_BIN" >&2; exit 1; }
+
+    local spec lane rootfs_path
+    for spec in $ROOTFS_LANES; do
+        lane="${spec%%=*}"
+        rootfs_path="${spec#*=}"
+        if [ "$lane" = "$spec" ]; then
+            lane="$(basename "$rootfs_path")"
+        fi
+        run_lane "$lane" "$rootfs_path"
+    done
 
     write_report
     echo "report: $REPORT"
