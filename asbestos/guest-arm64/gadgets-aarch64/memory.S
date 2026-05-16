@@ -555,7 +555,13 @@
     ubfx x9, x22, #8, #5
     lsr x10, x22, #16
     add x11, _cpu, #CPU_x0
+    cmp x9, #31
+    b.eq fused_ldr32_cbz_sp_base
     ldr x12, [x11, x9, lsl #3]
+    b fused_ldr32_cbz_have_base
+fused_ldr32_cbz_sp_base:
+    ldr x12, [_cpu, #CPU_sp]
+fused_ldr32_cbz_have_base:
     add _addr, x12, x10
     and _addr, _addr, #0xffffffffffff
     mov x24, _addr
@@ -631,7 +637,13 @@
     ubfx x9, x22, #8, #5
     lsr x10, x22, #16
     add x11, _cpu, #CPU_x0
+    cmp x9, #31
+    b.eq fused_ldr32_cbnz_sp_base
     ldr x12, [x11, x9, lsl #3]
+    b fused_ldr32_cbnz_have_base
+fused_ldr32_cbnz_sp_base:
+    ldr x12, [_cpu, #CPU_sp]
+fused_ldr32_cbnz_have_base:
     add _addr, x12, x10
     and _addr, _addr, #0xffffffffffff
     mov x24, _addr
@@ -2738,7 +2750,13 @@ fused_ldr_sx_cbnz_t_unchained:
     ubfx x10, x22, #16, #12     // imm12, scaled by 2
     lsl x10, x10, #1
     add x11, _cpu, #CPU_x0
+    cmp x9, #31
+    b.eq fused_ldr16_cbz_sp_base
     ldr x12, [x11, x9, lsl #3]
+    b fused_ldr16_cbz_have_base
+fused_ldr16_cbz_sp_base:
+    ldr x12, [_cpu, #CPU_sp]
+fused_ldr16_cbz_have_base:
     add _addr, x12, x10
     and _addr, _addr, #0xffffffffffff
     mov x24, _addr
@@ -2783,7 +2801,13 @@ fused_ldr16_cbz_t_unchained:
     ubfx x10, x22, #16, #12
     lsl x10, x10, #1
     add x11, _cpu, #CPU_x0
+    cmp x9, #31
+    b.eq fused_ldr16_cbnz_sp_base
     ldr x12, [x11, x9, lsl #3]
+    b fused_ldr16_cbnz_have_base
+fused_ldr16_cbnz_sp_base:
+    ldr x12, [_cpu, #CPU_sp]
+fused_ldr16_cbnz_have_base:
     add _addr, x12, x10
     and _addr, _addr, #0xffffffffffff
     mov x24, _addr
@@ -2834,7 +2858,13 @@ fused_ldr16_cbnz_t_unchained:
     ubfx x9, x22, #8, #5        // rn
     ubfx x10, x22, #16, #12     // imm12, scaled by 1
     add x11, _cpu, #CPU_x0
+    cmp x9, #31
+    b.eq fused_ldr8_cbz_sp_base
     ldr x12, [x11, x9, lsl #3]
+    b fused_ldr8_cbz_have_base
+fused_ldr8_cbz_sp_base:
+    ldr x12, [_cpu, #CPU_sp]
+fused_ldr8_cbz_have_base:
     add _addr, x12, x10
     and _addr, _addr, #0xffffffffffff
     mov x24, _addr
@@ -2878,7 +2908,13 @@ fused_ldr8_cbz_t_unchained:
     ubfx x9, x22, #8, #5
     ubfx x10, x22, #16, #12
     add x11, _cpu, #CPU_x0
+    cmp x9, #31
+    b.eq fused_ldr8_cbnz_sp_base
     ldr x12, [x11, x9, lsl #3]
+    b fused_ldr8_cbnz_have_base
+fused_ldr8_cbnz_sp_base:
+    ldr x12, [_cpu, #CPU_sp]
+fused_ldr8_cbnz_have_base:
     add _addr, x12, x10
     and _addr, _addr, #0xffffffffffff
     mov x24, _addr

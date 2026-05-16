@@ -1809,7 +1809,7 @@ static int try_fuse_ldr32_sx_cbz64(struct gen_state *state, uint32_t rn, uint32_
 }
 
 static int try_fuse_ldr32_cbz32(struct gen_state *state, uint32_t rn, uint32_t rt, uint32_t imm12) {
-    if (rn == 31 || rt == 31 || PAGE(state->orig_ip) != PAGE(state->ip))
+    if (rt == 31 || PAGE(state->orig_ip) != PAGE(state->ip))
         return -1;
 
     uint32_t next_insn;
@@ -1879,7 +1879,7 @@ static int try_fuse_ldr_sx_cbz(struct gen_state *state, uint32_t rn, uint32_t rt
 }
 
 static int try_fuse_ldr16_cbz32(struct gen_state *state, uint32_t rn, uint32_t rt, uint32_t imm12) {
-    if (rn == 31 || rt == 31 || PAGE(state->orig_ip) != PAGE(state->ip))
+    if (rt == 31 || PAGE(state->orig_ip) != PAGE(state->ip))
         return -1;
 
     uint32_t next_insn;
@@ -1911,7 +1911,7 @@ static int try_fuse_ldr16_cbz32(struct gen_state *state, uint32_t rn, uint32_t r
 }
 
 static int try_fuse_ldr8_cbz32(struct gen_state *state, uint32_t rn, uint32_t rt, uint32_t imm12) {
-    if (rn == 31 || rt == 31 || PAGE(state->orig_ip) != PAGE(state->ip))
+    if (rt == 31 || PAGE(state->orig_ip) != PAGE(state->ip))
         return -1;
 
     uint32_t next_insn;

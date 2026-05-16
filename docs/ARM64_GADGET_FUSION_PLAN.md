@@ -300,6 +300,19 @@ Phase 2O implementation tranche:
   - Default/no-stats Node/Bun perf: `/workspace/tmp/ish-arm64-node-bun-perf-20260516-033659.md`, **10 / 10 passing**, no stats output.
   - Core Alpine runtime coverage: `/workspace/tmp/ish-arm64-runtime-coverage-20260516-033750.md`, **80 / 80 passing**.
 
+Phase 2P implementation tranche:
+
+- Extended the existing zero-extending `LDR Wt/LDRH Wt/LDRB Wt, [Xn, #imm] + CBZ/CBNZ Wt` fusions to also accept `rn == 31` SP-relative bases.
+- The fused gadgets now read `CPU_sp` directly for SP-base cases while preserving precise load fault PC via `LOCAL_jit_saved_pc`, destination-register store-before-branch ordering, and the existing target/fallthrough chaining model.
+- Added runtime fixtures:
+  - `arm64 ldrz sp cbz fusion` for successful SP-relative 32-bit, halfword, and byte zero-extending `CBZ`/`CBNZ` behavior.
+  - `arm64 fused ldrz sp cbz fault pc` for precise byte-load fault PC and no destination-register write on fault while guest SP is zero, delivered on a signal altstack.
+- Validation reports:
+  - Targeted success/fault smokes: `ldrz-sp-cbz-fusion-ok`, `fused-ldrz-sp-cbz-fault-ok`.
+  - Counter-enabled Node/Bun perf: `/workspace/tmp/ish-arm64-node-bun-perf-20260516-035402.md`, **10 / 10 passing**. The measured `ldr_cbz` residual gap dropped to about `803` (`137188` fused out of `137991` candidates in that table), indicating the previous remaining gap was mostly SP-base narrow zero-ext loads.
+  - Default/no-stats Node/Bun perf: `/workspace/tmp/ish-arm64-node-bun-perf-20260516-035444.md`, **10 / 10 passing**, no stats output.
+  - Core Alpine runtime coverage: `/workspace/tmp/ish-arm64-runtime-coverage-20260516-035535.md`, **82 / 82 passing**.
+
 ## Phase 3: linear superblocks
 
 Phase 3 should wait until the Phase 1 fusion tranche is stable across repeated Node/Bun and core runtime runs. Initial design remains same-page and conservative:
