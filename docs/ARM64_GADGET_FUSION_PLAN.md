@@ -361,6 +361,16 @@ Phase 3A scoping decision after refined counters:
 - The first true superblock prototype should be opt-in and should add a targeted invalidation fixture where code in the second segment is patched after the superblock is compiled. The test must prove page-index invalidation drops the whole superblock and that precise load/store fault PCs still report the faulting guest instruction, not the superblock entry.
 - Given the current data, the best next implementation step is a design/representation tranche or a very narrow eager-prechain experiment, not internal-target concatenation.
 
+Phase 3A eager same-page prechain experiment:
+
+- Added default-off `ISH_ARM64_EAGER_PRECHAIN=1`. When enabled, `fiber_insert` scans a newly inserted block's outgoing `jump_ip` slots and patches only same-page fake-IP targets that already have compiled `fiber_block` entries. The patched value is still exactly `target->code`, and the existing `jumps_from` back-reference is recorded so invalidation restores the original fake IP. No interior code pointers or true superblock targets are introduced.
+- Extended `ISH_ARM64_BLOCK_STATS=1` with `prechain_attempts` and `prechain_patches`. These counters stay zero unless eager prechain is enabled.
+- Validation reports:
+  - Targeted smokes: default eager run produced no `ARM64_BLOCK_STATS`; stats-only without eager reported `prechain_attempts=0 prechain_patches=0`; eager+stats reported non-zero prechain counters.
+  - Eager+fusion+block-stats Node/Bun perf: `/workspace/tmp/ish-arm64-node-bun-perf-20260516-050919.md`, **10 / 10 passing**. Aggregated table totals include `entries=12277423`, `chain_attempts=5241011`, `chain_patches=4514664`, `chain_patch_same_page=3357469`, `chain_patch_cross_page=1157195`, `prechain_attempts=5917118`, and `prechain_patches=409210`.
+  - Default/no-stats Node/Bun perf: `/workspace/tmp/ish-arm64-node-bun-perf-20260516-050953.md`, **10 / 10 passing**, no stats output.
+  - Eager-prechain Alpine runtime coverage: `/workspace/tmp/ish-arm64-runtime-coverage-20260516-052452.md`, **82 / 82 passing**. A prior full run had one transient Rust optimized-std failure, but the exact failing command passed on isolation before the clean full rerun.
+
 ## Phase 4: hot traces
 
 Only after superblocks are stable:
