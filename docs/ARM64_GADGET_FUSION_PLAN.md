@@ -402,6 +402,16 @@ True-superblock representation scoping:
 - Scaffold validation: `make build-arm64-linux`, default/no-stats shell smoke, opt-in block-stats shell smoke, default Node/Bun perf `/workspace/tmp/ish-arm64-node-bun-perf-20260516-082912.md` (**10 / 10 passing**), and full Alpine runtime coverage `/workspace/tmp/ish-arm64-runtime-coverage-20260516-083022.md` (**82 / 82 passing**).
 - Scaffold audit: `gadget_internal_continue` is present in the ARM64 control object and final binary, immediately before `gadget_branch`, but no generator path emits it. The only `internal_continue_count` assignment is zero-initialization in `gen_start`; there are no increment/call-site writes yet. Disassembly shows the gadget only loads `guest_pc`, loads the internal continuation pointer, stores `CPU_pc`, assigns `_pc`, and performs normal `gret` dispatch. It does not call or branch to `fiber_ret_chain`, so it cannot be confused with normal external chained pointers unless a future generator explicitly emits it.
 
+First internal-continue call-site scope:
+
+- Do not try to reuse existing conditional branch operands for internal targets. Current `bcond`, `cbz/cbnz`, `tbz/tbnz`, and fused branch gadgets run selected operands through `inline_chain`/`fiber_ret_chain`, so a bit-63-clear interior pointer would be misread as a `fiber_block->code` start.
+- Narrowest first shape should be a new conditional gadget variant with exactly one internal successor and one normal external fake-IP successor. The internal successor should point to a `gadget_internal_continue` code-stream record; the external successor should remain a normal fake IP and be the only operand recorded in `jump_ip`.
+- Start with non-call conditional branches only (`B.cond`, then optionally `CBZ/CBNZ`/`TBZ/TBNZ`). Exclude `BL`, `BLR`, `RET`, indirect branches, syscalls, barriers/atomics, page-boundary cases, and ret-cache-affecting shapes.
+- Prefer fallthrough-internal first: compile the not-taken/fallthrough segment after the branch, let the taken side exit through fake-IP dispatch, and only add a taken-internal variant after branch/fallthrough fixtures pass.
+- Generator requirements before implementation: add an emit helper that checks `internal_continue_count < GEN_INTERNAL_CONTINUE_MAX`, emits `[gadget_internal_continue][guest_pc][0]`, records the pointer operand slot in `internal_continue_patch_ip[]`, records the target code offset in `internal_continue_target_ip[]`, and increments the count only after all fields are valid.
+- The first prototype should compile at most one extra segment, same page only, direct known successor only, no nested internal branches, and a small instruction budget. `block->end_addr` and page hash membership must conservatively cover the appended segment.
+- Required first-call-site fixtures: forced taken external path, forced fallthrough internal path, page invalidation after compiling the internal segment, precise load/store fault PC inside the internal segment, ret-cache unaffected by nearby `BL`/`RET` code, default/no-env silence, and iOS default-off posture unchanged.
+
 ## Phase 4: hot traces
 
 Only after superblocks are stable:
