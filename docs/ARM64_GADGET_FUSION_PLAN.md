@@ -287,6 +287,19 @@ Phase 2N implementation tranche:
   - Default/no-stats Node/Bun perf: `/workspace/tmp/ish-arm64-node-bun-perf-20260516-031601.md`, **10 / 10 passing**, no stats output.
   - Core Alpine runtime coverage: `/workspace/tmp/ish-arm64-runtime-coverage-20260516-031642.md`, **78 / 78 passing**.
 
+Phase 2O implementation tranche:
+
+- Implemented narrow adjacent same-page `LDRSB/LDRSH Xt/Wt, [Xn/SP, #imm] + matching CBZ/CBNZ Xt/Wt` fusion for sign-extending byte/halfword unsigned-offset loads followed by same-width zero/nonzero branches.
+- The fused gadget supports both general-register and SP bases, writes the LDRSB/LDRSH guest PC into `LOCAL_jit_saved_pc` before the faultable memory access, stores the sign-extended destination register before branching, and preserves the existing target/fallthrough chaining model.
+- Added runtime fixtures:
+  - `arm64 ldrsx8/16 cbz fusion` for successful general-register and SP-relative signed byte/halfword behavior, including 32-bit and 64-bit sign-extension cases.
+  - `arm64 fused ldrsx8/16 cbz fault pc` for precise signed halfword fault PC and no destination-register write on fault while guest SP is zero, delivered on a signal altstack.
+- Validation reports:
+  - Targeted success/fault smokes: `ldrsx8-16-cbz-fusion-ok`, `fused-ldrsx8-16-cbz-fault-ok`; a counter-only fixture run showed signed-byte fusion hits (`ldr8_sx_cbz=4`).
+  - Counter-enabled Node/Bun perf: `/workspace/tmp/ish-arm64-node-bun-perf-20260516-033606.md`, **10 / 10 passing**. Current measured table hits are signed-byte only: total `ldr8_sx_cbz=545` and `ldr8_sx_cbz_cand=545`; signed-halfword candidate/hit counters were zero in this table. Remaining `ldr_cbz` candidate gap is about `4316`.
+  - Default/no-stats Node/Bun perf: `/workspace/tmp/ish-arm64-node-bun-perf-20260516-033659.md`, **10 / 10 passing**, no stats output.
+  - Core Alpine runtime coverage: `/workspace/tmp/ish-arm64-runtime-coverage-20260516-033750.md`, **80 / 80 passing**.
+
 ## Phase 3: linear superblocks
 
 Phase 3 should wait until the Phase 1 fusion tranche is stable across repeated Node/Bun and core runtime runs. Initial design remains same-page and conservative:

@@ -2573,6 +2573,153 @@ fused_ldr32_sx_cbnz_t_unchained:
     read_bullshit 32, fused_ldr32_sx_cbnz_imm_1
 
 /*
+ * Fused LDRSB/LDRSH Xt/Wt, [Xn/SP, #imm] + matching CBZ/CBNZ Xt/Wt.
+ * Code stream: [gadget addr]
+ *              [rt | rn<<8 | ldr_imm12<<16 | size<<28 | extend64<<29]
+ *              [ldr_guest_pc][target][fallthrough]
+ * size 0 = byte, size 1 = halfword. extend64 selects Xt vs Wt sign-extension
+ * and must match the branch width. LOCAL_jit_saved_pc is set to the load PC
+ * before the faultable access so guest signals report the load.
+ */
+.gadget fused_ldr_sx_cbz_imm
+    ldr x22, [_pc]
+    ldr x23, [_pc, #8]          // precise LDRSB/LDRSH guest PC
+    ldr x25, [_pc, #16]         // target (fake_ip or chained)
+    ldr x26, [_pc, #24]         // fallthrough (fake_ip or chained)
+    add _pc, _pc, #32
+
+    str x23, [_cpu, #LOCAL_jit_saved_pc]
+    ubfx x9, x22, #8, #5        // rn, 31 means SP
+    ubfx x10, x22, #16, #12     // imm12, scaled by size
+    tbz x22, #28, fused_ldr_sx_cbz_unscaled
+    lsl x10, x10, #1
+fused_ldr_sx_cbz_unscaled:
+    add x11, _cpu, #CPU_x0
+    cmp x9, #31
+    b.eq fused_ldr_sx_cbz_sp_base
+    ldr x12, [x11, x9, lsl #3]
+    b fused_ldr_sx_cbz_have_base
+fused_ldr_sx_cbz_sp_base:
+    ldr x12, [_cpu, #CPU_sp]
+fused_ldr_sx_cbz_have_base:
+    add _addr, x12, x10
+    and _addr, _addr, #0xffffffffffff
+    mov x24, _addr
+
+    tbnz x22, #28, fused_ldr_sx_cbz_load16
+fused_ldr_sx_cbz_load8:
+    read_prep 8, fused_ldr_sx_cbz_imm_8
+    tbnz x22, #29, fused_ldr_sx_cbz_load8_64
+    ldrsb w0, [_addr]
+    b fused_ldr_sx_cbz_after_load
+fused_ldr_sx_cbz_load8_64:
+    ldrsb _tmp, [_addr]
+    b fused_ldr_sx_cbz_after_load
+fused_ldr_sx_cbz_load16:
+    read_prep 16, fused_ldr_sx_cbz_imm_16
+    tbnz x22, #29, fused_ldr_sx_cbz_load16_64
+    ldrsh w0, [_addr]
+    b fused_ldr_sx_cbz_after_load
+fused_ldr_sx_cbz_load16_64:
+    ldrsh _tmp, [_addr]
+
+fused_ldr_sx_cbz_after_load:
+    and x8, x22, #0x1f          // rt, guaranteed != 31
+    add x11, _cpu, #CPU_x0
+    str _tmp, [x11, x8, lsl #3]
+    mov _addr, x24
+    cbz _tmp, fused_ldr_sx_cbz_taken
+fused_ldr_sx_cbz_not_taken:
+    tbnz x26, #63, fused_ldr_sx_cbz_nt_unchained
+    mov _pc, x26
+    b fiber_ret_chain
+fused_ldr_sx_cbz_nt_unchained:
+    and x11, x26, #0xffffffffffff
+    str x11, [_cpu, #CPU_pc]
+    mov _pc, x26
+    b fiber_ret_chain
+fused_ldr_sx_cbz_taken:
+    tbnz x25, #63, fused_ldr_sx_cbz_t_unchained
+    mov _pc, x25
+    b fiber_ret_chain
+fused_ldr_sx_cbz_t_unchained:
+    and x11, x25, #0xffffffffffff
+    str x11, [_cpu, #CPU_pc]
+    mov _pc, x25
+    b fiber_ret_chain
+    read_bullshit 8, fused_ldr_sx_cbz_imm_8
+    read_bullshit 16, fused_ldr_sx_cbz_imm_16
+
+.gadget fused_ldr_sx_cbnz_imm
+    ldr x22, [_pc]
+    ldr x23, [_pc, #8]
+    ldr x25, [_pc, #16]
+    ldr x26, [_pc, #24]
+    add _pc, _pc, #32
+
+    str x23, [_cpu, #LOCAL_jit_saved_pc]
+    ubfx x9, x22, #8, #5
+    ubfx x10, x22, #16, #12
+    tbz x22, #28, fused_ldr_sx_cbnz_unscaled
+    lsl x10, x10, #1
+fused_ldr_sx_cbnz_unscaled:
+    add x11, _cpu, #CPU_x0
+    cmp x9, #31
+    b.eq fused_ldr_sx_cbnz_sp_base
+    ldr x12, [x11, x9, lsl #3]
+    b fused_ldr_sx_cbnz_have_base
+fused_ldr_sx_cbnz_sp_base:
+    ldr x12, [_cpu, #CPU_sp]
+fused_ldr_sx_cbnz_have_base:
+    add _addr, x12, x10
+    and _addr, _addr, #0xffffffffffff
+    mov x24, _addr
+
+    tbnz x22, #28, fused_ldr_sx_cbnz_load16
+fused_ldr_sx_cbnz_load8:
+    read_prep 8, fused_ldr_sx_cbnz_imm_8
+    tbnz x22, #29, fused_ldr_sx_cbnz_load8_64
+    ldrsb w0, [_addr]
+    b fused_ldr_sx_cbnz_after_load
+fused_ldr_sx_cbnz_load8_64:
+    ldrsb _tmp, [_addr]
+    b fused_ldr_sx_cbnz_after_load
+fused_ldr_sx_cbnz_load16:
+    read_prep 16, fused_ldr_sx_cbnz_imm_16
+    tbnz x22, #29, fused_ldr_sx_cbnz_load16_64
+    ldrsh w0, [_addr]
+    b fused_ldr_sx_cbnz_after_load
+fused_ldr_sx_cbnz_load16_64:
+    ldrsh _tmp, [_addr]
+
+fused_ldr_sx_cbnz_after_load:
+    and x8, x22, #0x1f
+    add x11, _cpu, #CPU_x0
+    str _tmp, [x11, x8, lsl #3]
+    mov _addr, x24
+    cbnz _tmp, fused_ldr_sx_cbnz_taken
+fused_ldr_sx_cbnz_not_taken:
+    tbnz x26, #63, fused_ldr_sx_cbnz_nt_unchained
+    mov _pc, x26
+    b fiber_ret_chain
+fused_ldr_sx_cbnz_nt_unchained:
+    and x11, x26, #0xffffffffffff
+    str x11, [_cpu, #CPU_pc]
+    mov _pc, x26
+    b fiber_ret_chain
+fused_ldr_sx_cbnz_taken:
+    tbnz x25, #63, fused_ldr_sx_cbnz_t_unchained
+    mov _pc, x25
+    b fiber_ret_chain
+fused_ldr_sx_cbnz_t_unchained:
+    and x11, x25, #0xffffffffffff
+    str x11, [_cpu, #CPU_pc]
+    mov _pc, x25
+    b fiber_ret_chain
+    read_bullshit 8, fused_ldr_sx_cbnz_imm_8
+    read_bullshit 16, fused_ldr_sx_cbnz_imm_16
+
+/*
  * Fused LDRH Wt, [Xn, #imm] + CBZ/CBNZ Wt.
  * Code stream: [gadget addr][rt | rn<<8 | ldr_imm12<<16][ldr_guest_pc][target][fallthrough]
  * The loaded register is zero-extended and stored before branching.
