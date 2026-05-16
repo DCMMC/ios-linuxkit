@@ -187,8 +187,8 @@ static NSMapTable<NSUUID *, Terminal *> *terminalsByUUID;
             @synchronized (self) {
                 if (self->_tty != tty)
                     return;
+                tty->ops->resize(tty, cols, rows);
             }
-            tty->ops->resize(tty, cols, rows);
         });
 #endif
     }];
@@ -252,8 +252,8 @@ static NSMapTable<NSUUID *, Terminal *> *terminalsByUUID;
         @synchronized (self) {
             if (self->_tty != tty)
                 return;
+            tty->ops->send_input(tty, inputRef.bytes, inputRef.length);
         }
-        tty->ops->send_input(tty, inputRef.bytes, inputRef.length);
     });
 #endif
     [self.webView evaluateJavaScript:@"exports.setUserGesture()" completionHandler:nil];
@@ -300,8 +300,8 @@ static NSMapTable<NSUUID *, Terminal *> *terminalsByUUID;
                 @synchronized (self) {
                     if (self->_tty != tty)
                         return;
+                    tty->ops->can_output(tty);
                 }
-                tty->ops->can_output(tty);
             });
     }
 #endif
