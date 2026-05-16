@@ -8,6 +8,8 @@ The project is based on the `ish-arm64` branch of [iSH](https://ish.app/), but t
 
 All the harness tests run in ARM64 Linux, providing direct introspection, debugging, and tracing capabilities that enable easier, reproducible fixes instead of fiddling with a mixed macOS/iOS/Linux environment. 
 
+It is currently being used by [Kitty Litter](https://kittylitter.app) and a few other iOS developers.
+
 > **AI Usage:** The harness testing and subsequent fixes are designed to be AI-driven to enable a tight detection/fix loop, and was run under [`rcarmo/piclaw`](https://github.com/rcarmo/piclaw) using GPT-5.5 and a custom `gdb` skill that ships with the repository. The strategy for doing that, including performance optimizations and directions for coalescing gadget calls into faster code sections is entirely human-driven, and informed by years of fiddling with low-level runtimes.
 
 ## What it provides
