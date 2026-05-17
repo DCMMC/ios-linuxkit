@@ -25,19 +25,7 @@ struct asbestos {
     // A way to look up blocks in a page
     struct {
         struct list blocks[2];
-#ifdef GUEST_ARM64
-        // Dormant hot-trace records are owned by the page they cover. These
-        // lists contain sidecar metadata only; normal jump_ip/ret-cache paths
-        // never consume them as executable targets.
-        struct list arm64_trace_records;
-#endif
     } *page_hash;
-
-#ifdef GUEST_ARM64
-    // Sidecar ARM64 hot-trace record ownership. Records are non-executing
-    // metadata while Phase 4 guard/invalidation fixtures are developed.
-    struct list arm64_trace_records;
-#endif
 
     // Incremented on every block invalidation; used to invalidate persistent
     // per-thread block caches (which may hold pointers to jetsam'd blocks).
@@ -84,12 +72,6 @@ struct fiber_block {
     struct list page[2];
     // links for jumps_from
     struct list jumps_from_links[2];
-#ifdef GUEST_ARM64
-    // Dormant sidecar trace-record cleanup links. These are metadata lists,
-    // not alternate control-flow/chaining targets.
-    struct list arm64_trace_sources[2];
-    struct list arm64_trace_targets;
-#endif
     // links for free list
     struct list jetsam;
     bool is_jetsam;

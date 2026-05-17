@@ -16,7 +16,7 @@ This file describes the validation gates used before advertising a runtime chang
 | Timeouts | Latest Alpine gate used `TIMEOUT_S=120`, `INSTALL_TIMEOUT_S=1200`; broad/local gate command below keeps `TIMEOUT_S=180` for margin. |
 | Required diagnostics | `SAFETY-VALVE=0`, `NETDIAG=0` in clean core logs |
 
-Related docs: [workload smoke tests](ARM64_WORKLOAD_SMOKE_TESTS.md), [syscall coverage ledger](ARM64_SMOKE_ISSUES_AND_SYSCALL_COVERAGE.md), [executor plan](ARM64_GADGET_FUSION_PLAN.md).
+Related docs: [workload smoke tests](ARM64_WORKLOAD_SMOKE_TESTS.md), [syscall coverage ledger](ARM64_SMOKE_ISSUES_AND_SYSCALL_COVERAGE.md).
 
 ## Gates
 
@@ -58,8 +58,8 @@ Related docs: [workload smoke tests](ARM64_WORKLOAD_SMOKE_TESTS.md), [syscall co
 |---|---|---|
 | CLI corner cases | TUI tools, DNS/HTTPS, GitHub clone, Docker CLI/daemon diagnostics, `strace`, `lsof`, netlink visibility. | **27 pass / 2 unsupported / 0 fail**. Docker daemon/container rows are unsupported without container kernel primitives. |
 | npm CLI package lane | Unauthenticated install/startup/help/version probes for npm-installed CLIs. | **16 / 16** in Alpine npm lane. Debian/glibc lane remains blocked by thread/libuv assertions. |
-| Node/Bun perf | Timing table for executor changes and optional block/prechain/hot-trace statistics. | Use before/after dispatch optimization work; default reports must stay free of stats output. Latest dispatch dry-run pair: default `/workspace/tmp/ish-arm64-node-bun-perf-20260517-150517.md` and stats+hot-trace `/workspace/tmp/ish-arm64-node-bun-perf-20260517-150600.md`, both **10 / 10**. |
-| ARM64 executor diagnostics | `ISH_ARM64_BLOCK_STATS=1`, `ISH_ARM64_FUSION_STATS=1`, dry-run `ISH_ARM64_HOT_TRACE=1` counters, and `make test-arm64-hot-trace-record-smoke`. | Opt-in only; do not run exact-output runtime coverage with these diagnostics because they intentionally write `ARM64_*_STATS` lines. Current hot-trace diagnostics are non-executing and default-off: bounded sidecar trace-record metadata, dormant guard checks, and dispatch dry-run lookups may run only under the hot-trace gate, but there is no trace execution, guarded-exit path, invalidation epoch change, executable allocation, or generated-code behavior change. Latest sidecar fixture report `/workspace/tmp/ish-arm64-hot-trace-record-smoke-20260517-152231.md` was **8 / 8**. |
+| Node/Bun perf | Timing table for executor changes and optional block/prechain statistics. | Use before/after dispatch optimization work; default reports must stay free of stats output. Latest post-hot-trace-removal pair: default `/workspace/tmp/ish-arm64-node-bun-perf-20260517-162526.md` and stats `/workspace/tmp/ish-arm64-node-bun-perf-20260517-162607.md`, both **10 / 10**. |
+| ARM64 executor diagnostics | `ISH_ARM64_BLOCK_STATS=1` and `ISH_ARM64_FUSION_STATS=1` counters. | Opt-in only; do not run exact-output runtime coverage with these diagnostics because they intentionally write `ARM64_*_STATS` lines. Speculative hot-trace diagnostics and sidecar records were attempted but removed after showing no significant gains relative to overhead. |
 | NativeAOT publish | Full `dotnet publish -p:PublishAot=true`. | Opt-in only via `ISH_ARM64_DOTNET_AOT_PUBLISH=1`; current focused probes stall in Roslyn `csc` after restore. |
 
 ## Failure rules

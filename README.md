@@ -30,7 +30,7 @@ See [runtime validation](docs/RUNTIME_VALIDATION.md) for commands, reports, and 
 
 ## Executor optimization status
 
-ARM64 executor speed work is documented in [ARM64_GADGET_FUSION_PLAN.md](docs/ARM64_GADGET_FUSION_PLAN.md). Current Phase 4 hot-trace work is deliberately non-executing and default-off: `ISH_ARM64_BLOCK_STATS=1 ISH_ARM64_HOT_TRACE=1` records candidate-edge counters plus bounded adjacent trace-record sidecar diagnostics for future guarded trace design, but the runtime does not execute traces, add guarded exits, change invalidation epochs, allocate executable memory, store trace/interior targets in `jump_ip`, or change generated gadget streams.
+Speculative ARM64 hot-trace instrumentation was attempted and then removed after it failed to show significant gains relative to its maintenance and runtime overhead. Current retained speed work is limited to validated block chaining/prechain and internal-continue paths; optional `ISH_ARM64_BLOCK_STATS=1` diagnostics report those retained counters only.
 
 ## Validation host
 
@@ -72,7 +72,6 @@ Generated reports are Markdown files under `REPORT_DIR`. A row is not a pass if 
 - [docs/RUNTIME_VALIDATION.md](docs/RUNTIME_VALIDATION.md) — gates, commands, coverage areas, failure rules.
 - [docs/ARM64_WORKLOAD_SMOKE_TESTS.md](docs/ARM64_WORKLOAD_SMOKE_TESTS.md) — heavier workload matrix.
 - [docs/ARM64_BACKEND.md](docs/ARM64_BACKEND.md) — ARM64 backend architecture notes.
-- [docs/ARM64_GADGET_FUSION_PLAN.md](docs/ARM64_GADGET_FUSION_PLAN.md) — executor optimization notes.
 - [docs/LINUX_BUILD_AND_HOST_ABI.md](docs/LINUX_BUILD_AND_HOST_ABI.md) — Linux-host build/platform notes.
 - [docs/ORIGINAL_ISH_README.md](docs/ORIGINAL_ISH_README.md) — preserved upstream/fork README material.
 

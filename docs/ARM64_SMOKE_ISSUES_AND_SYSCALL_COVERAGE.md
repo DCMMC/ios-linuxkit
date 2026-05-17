@@ -188,8 +188,6 @@ The helper cleanup also keeps ARM64-only reservation handling behind `GUEST_ARM6
 
 The package rows avoid native credential/keychain integrations during unauthenticated help/version checks; npm scripts or native addons are disabled or stubbed when the row only needs to validate CLI startup.
 
-## 2026-05-17 ARM64 executor Phase 4 reconnaissance status
+## 2026-05-17 ARM64 executor diagnostics status
 
-Phase 4 executor work after the internal-continue tranche remains non-executing/default-off. The latest commits add opt-in block/hot-trace counters behind `ISH_ARM64_BLOCK_STATS=1` and `ISH_ARM64_HOT_TRACE=1`, including dry-run candidate eligibility, a top-8 eligible-edge heavy-hitter table, and bounded adjacent trace-record sidecar metadata. They do **not** execute hot traces, add guarded exits, change invalidation epochs, store interior trace pointers in `jump_ip`, allocate executable trace memory, or change generated gadget streams.
-
-The current evidence favors a future first trace prototype constrained to same-page forward edges, preferably adjacent or very-near candidates. Node/Bun gated diagnostics at `/workspace/tmp/ish-arm64-node-bun-perf-20260517-092700.md` passed **10 / 10** and reported `hot_trace_edge_candidate=9148801` out of `hot_trace_edge_samples=12505085` (**73.16%**), with `hot_trace_edge_candidate_adjacent=6560652` and `hot_trace_edge_candidate_le16=6067462`. Default runtime coverage remains **83 / 83** at `/workspace/tmp/ish-arm64-runtime-coverage-20260517-092759.md`; keep stats-enabled diagnostic output out of exact-output runtime coverage gates.
+Speculative Phase 4 hot-trace candidate instrumentation was attempted and removed after review because it added maintenance/diagnostic overhead without significant measured gains or a near-term viable speed path. Retained executor diagnostics are limited to opt-in block/chaining/prechain counters behind `ISH_ARM64_BLOCK_STATS=1`; exact-output runtime coverage should still run without stats output.
