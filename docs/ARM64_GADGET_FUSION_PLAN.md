@@ -463,6 +463,20 @@ Phase 4 forward-edge distance/adjacency tranche:
 - Node/Bun validation: default `/workspace/tmp/ish-arm64-node-bun-perf-20260517-081447.md` and block-stats `/workspace/tmp/ish-arm64-node-bun-perf-20260517-081536.md` were both **10 / 10 passing**. Aggregated same-page-forward bucket evidence from the stats run: `trace_edge_forward_same_page=9563135`, `trace_edge_forward_adjacent=6599987` (**69.01%** of forward edges), `trace_edge_forward_le16=6066876` (**63.44%**), `trace_edge_forward_17_64=3080110` (**32.21%**), `trace_edge_forward_65_256=251698` (**2.63%**), and `trace_edge_forward_gt256=164451` (**1.72%**). This supports keeping any first trace prototype constrained to adjacent or very-near same-page forward edges.
 - Runtime validation: the first default runtime pass stopped around the known intermittent Java mixed-mode row without producing a report; the rerun passed full Alpine runtime coverage **83 / 83** at `/workspace/tmp/ish-arm64-runtime-coverage-20260517-082042.md`.
 
+Phase 4 dormant hot-trace gate/guardrail scaffold:
+
+- Added a Linux/local-runtime-only `ISH_ARM64_HOT_TRACE` env gate and surfaced its parsed state as `hot_trace_enabled=0/1` in the existing `ARM64_BLOCK_HOT_STATS` diagnostics. The gate is deliberately dormant: it does not build traces, does not add guarded exits, does not alter invalidation epochs, and does not change generated gadget streams or normal execution behavior.
+- Default-off posture: setting `ISH_ARM64_HOT_TRACE=1` only records intent for future guard-gated trace work and is only externally visible when `ISH_ARM64_BLOCK_STATS=1` also enables the diagnostic dump. The iOS/app path remains unchanged; no app source/config file should reference `ISH_ARM64_HOT_TRACE` unless a future app-specific initialization path is designed.
+- Focused smoke: default `/workspace/tmp/arm64-hottrace-default-20260517-084204.log` and hot-trace-only `/workspace/tmp/arm64-hottrace-hotonly-20260517-084204.log` stayed `ARM64_BLOCK` silent; stats-only `/workspace/tmp/arm64-hottrace-stats-20260517-084204.log` reported `hot_trace_enabled=0`; stats+hot-trace `/workspace/tmp/arm64-hottrace-enabled-20260517-084204.log` reported `hot_trace_enabled=1`.
+- Node/Bun validation: default `/workspace/tmp/ish-arm64-node-bun-perf-20260517-084220.md` and `ISH_ARM64_BLOCK_STATS=1 ISH_ARM64_HOT_TRACE=1` `/workspace/tmp/ish-arm64-node-bun-perf-20260517-084252.md` were both **10 / 10 passing**. The default report stayed free of `ARM64_BLOCK` diagnostics, while the enabled report included `ARM64_BLOCK_HOT_STATS hot_trace_enabled=1`.
+- Runtime validation: default Alpine runtime coverage was **83 / 83 passing** at `/workspace/tmp/ish-arm64-runtime-coverage-20260517-085451.md`.
+- Guardrails before any real hot-trace builder lands:
+  1. Candidate selection must start with observed same-page forward edges only, preferably adjacent or very-near edges supported by the current bucket evidence. Keep self-loops, backward edges, cross-page edges, indirect exits, syscalls, atomics/barriers, and page-boundary cases excluded until specific guard behavior is designed.
+  2. External exits must continue to use fake-IP / normal block dispatch semantics unless a dedicated guarded-exit representation is added and tested. Do not store interior trace pointers in `jump_ip`, ret-cache continuations, or any structure consumed by `fiber_ret_chain`.
+  3. Invalidation must be proven before executable traces are enabled: a guest write to any compiled trace segment must retire the whole trace, and any epoch/guard metadata must fail closed back to normal block execution.
+  4. Precise fault-PC behavior must stay per-instruction inside any traced segment, matching the existing `gadget_set_jit_saved_pc` rule for faultable memory operations.
+  5. Initial executable traces, if/when attempted, must be opt-in behind `ISH_ARM64_HOT_TRACE=1`, short, same-page, direct-known-successor only, and covered by focused invalidation, fault-PC, guarded-exit, default-silence, and iOS default-off audits before performance claims.
+
 ## Validation gates
 
 For each implementation tranche:

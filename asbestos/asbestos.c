@@ -55,6 +55,7 @@ __attribute__((weak)) void *mem_ptr(struct mem *mem, addr_t addr, int type) {
 #ifdef GUEST_ARM64
 bool arm64_block_stats_enabled;
 static bool arm64_block_stats_dumped;
+static bool arm64_hot_trace_enabled;
 static bool arm64_eager_prechain_enabled;
 static bool arm64_eager_prechain_incoming_enabled;
 static _Atomic uint64_t arm64_block_stats_entries;
@@ -192,6 +193,10 @@ void arm64_block_stats_set_enabled_from_env(const char *env) {
     arm64_block_stats_enabled = env_enabled(env);
 }
 
+void arm64_hot_trace_set_enabled_from_env(const char *env) {
+    arm64_hot_trace_enabled = env_enabled(env);
+}
+
 void arm64_eager_prechain_set_enabled_from_env(const char *env) {
     arm64_eager_prechain_enabled = env_enabled(env);
 }
@@ -268,7 +273,8 @@ void arm64_block_stats_dump_if_enabled(void) {
     }
 
     fprintf(stderr,
-            "ARM64_BLOCK_HOT_STATS block_samples=%llu block_evictions=%llu edge_samples=%llu edge_evictions=%llu trace_edge_same_page=%llu trace_edge_forward_same_page=%llu trace_edge_forward_adjacent=%llu trace_edge_forward_le16=%llu trace_edge_forward_17_64=%llu trace_edge_forward_65_256=%llu trace_edge_forward_gt256=%llu trace_edge_backward_same_page=%llu trace_edge_self_loop=%llu trace_edge_cross_page=%llu trace_edge_unknown_slot=%llu",
+            "ARM64_BLOCK_HOT_STATS hot_trace_enabled=%u block_samples=%llu block_evictions=%llu edge_samples=%llu edge_evictions=%llu trace_edge_same_page=%llu trace_edge_forward_same_page=%llu trace_edge_forward_adjacent=%llu trace_edge_forward_le16=%llu trace_edge_forward_17_64=%llu trace_edge_forward_65_256=%llu trace_edge_forward_gt256=%llu trace_edge_backward_same_page=%llu trace_edge_self_loop=%llu trace_edge_cross_page=%llu trace_edge_unknown_slot=%llu",
+            arm64_hot_trace_enabled ? 1u : 0u,
             (unsigned long long)hot_block_samples,
             (unsigned long long)hot_block_evictions,
             (unsigned long long)hot_edge_samples,
