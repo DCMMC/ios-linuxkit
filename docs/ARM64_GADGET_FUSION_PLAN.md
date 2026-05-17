@@ -477,6 +477,15 @@ Phase 4 dormant hot-trace gate/guardrail scaffold:
   4. Precise fault-PC behavior must stay per-instruction inside any traced segment, matching the existing `gadget_set_jit_saved_pc` rule for faultable memory operations.
   5. Initial executable traces, if/when attempted, must be opt-in behind `ISH_ARM64_HOT_TRACE=1`, short, same-page, direct-known-successor only, and covered by focused invalidation, fault-PC, guarded-exit, default-silence, and iOS default-off audits before performance claims.
 
+Phase 4 dry-run hot-trace eligibility tranche:
+
+- Extended `ARM64_BLOCK_HOT_STATS` with `ISH_ARM64_HOT_TRACE`-gated dry-run eligibility counters for a possible first trace builder. These counters stay zero with `ISH_ARM64_BLOCK_STATS=1` alone and only classify edges when both `ISH_ARM64_BLOCK_STATS=1` and `ISH_ARM64_HOT_TRACE=1` are set.
+- The dry-run candidate policy is intentionally conservative: a candidate edge must have a matched direct `jump_ip` slot, be same-page, be forward, and have `to->addr - from->addr <= 64`. Candidate sub-buckets count adjacent edges (`to->addr == from->end_addr + 1`) and very-near `<= 16` deltas. Reject counters split unknown-slot, self-loop, backward, cross-page, and far-forward edges. This still does not build traces, add guarded exits, change invalidation epochs, or alter generated gadget streams.
+- Focused smoke: default `/workspace/tmp/arm64-hottrace-elig-default-20260517-090932.log` and hot-trace-only `/workspace/tmp/arm64-hottrace-elig-hotonly-20260517-090932.log` stayed `ARM64_BLOCK` silent; stats-only `/workspace/tmp/arm64-hottrace-elig-stats-20260517-090932.log` reported all `hot_trace_edge_*` counters as zero; stats+hot-trace `/workspace/tmp/arm64-hottrace-elig-enabled-20260517-090932.log` reported non-zero `hot_trace_edge_samples` and `hot_trace_edge_candidate`.
+- Node/Bun validation: default `/workspace/tmp/ish-arm64-node-bun-perf-20260517-090948.md` and `ISH_ARM64_BLOCK_STATS=1 ISH_ARM64_HOT_TRACE=1` `/workspace/tmp/ish-arm64-node-bun-perf-20260517-091023.md` were both **10 / 10 passing**. Aggregated dry-run eligibility evidence from the gated run: `hot_trace_edge_samples=12499547`, `hot_trace_edge_candidate=9144734` (**73.16%**), `hot_trace_edge_candidate_adjacent=6555428` (**71.69%** of candidates), `hot_trace_edge_candidate_le16=6067139` (**66.35%** of candidates), `hot_trace_edge_reject_self_loop=2183640`, `hot_trace_edge_reject_backward=711973`, `hot_trace_edge_reject_cross_page=42931`, `hot_trace_edge_reject_far=416269`, and `hot_trace_edge_reject_unknown_slot=0`.
+- Runtime validation: default Alpine runtime coverage was **83 / 83 passing** at `/workspace/tmp/ish-arm64-runtime-coverage-20260517-091128.md`.
+- Next guardrail implication: the first executable hot-trace prototype, if attempted, should still start with adjacent or `<= 16` same-page forward edges and must add fail-closed guarded-exit and invalidation tests before enabling any trace execution path. The `<= 64` dry-run candidate bucket is useful for measurement breadth, not yet permission to trace far or loop-shaped paths.
+
 ## Validation gates
 
 For each implementation tranche:

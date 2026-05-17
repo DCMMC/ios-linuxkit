@@ -116,6 +116,15 @@ static _Atomic uint64_t arm64_block_stats_trace_edge_backward_same_page;
 static _Atomic uint64_t arm64_block_stats_trace_edge_self_loop;
 static _Atomic uint64_t arm64_block_stats_trace_edge_cross_page;
 static _Atomic uint64_t arm64_block_stats_trace_edge_unknown_slot;
+static _Atomic uint64_t arm64_block_stats_hot_trace_edge_samples;
+static _Atomic uint64_t arm64_block_stats_hot_trace_edge_candidate;
+static _Atomic uint64_t arm64_block_stats_hot_trace_edge_candidate_adjacent;
+static _Atomic uint64_t arm64_block_stats_hot_trace_edge_candidate_le16;
+static _Atomic uint64_t arm64_block_stats_hot_trace_edge_reject_unknown_slot;
+static _Atomic uint64_t arm64_block_stats_hot_trace_edge_reject_self_loop;
+static _Atomic uint64_t arm64_block_stats_hot_trace_edge_reject_backward;
+static _Atomic uint64_t arm64_block_stats_hot_trace_edge_reject_cross_page;
+static _Atomic uint64_t arm64_block_stats_hot_trace_edge_reject_far;
 static struct arm64_block_stats_hot_block arm64_block_stats_hot_blocks[ARM64_BLOCK_STATS_HOT_BLOCKS];
 static struct arm64_block_stats_hot_edge arm64_block_stats_hot_edges[ARM64_BLOCK_STATS_HOT_EDGES];
 
@@ -155,6 +164,41 @@ static void arm64_block_stats_record_hot_block_locked(addr_t pc) {
     arm64_block_stats_hot_blocks[min_i].pc = pc;
     arm64_block_stats_hot_blocks[min_i].count++;
     arm64_block_stats_hot_block_evictions++;
+}
+
+static void arm64_block_stats_count_hot_trace_edge(struct fiber_block *from, struct fiber_block *to, bool matched_slot) {
+    if (!arm64_hot_trace_enabled)
+        return;
+
+    atomic_fetch_add_explicit(&arm64_block_stats_hot_trace_edge_samples, 1, memory_order_relaxed);
+    if (!matched_slot) {
+        atomic_fetch_add_explicit(&arm64_block_stats_hot_trace_edge_reject_unknown_slot, 1, memory_order_relaxed);
+        return;
+    }
+    if (PAGE(from->addr) != PAGE(to->addr)) {
+        atomic_fetch_add_explicit(&arm64_block_stats_hot_trace_edge_reject_cross_page, 1, memory_order_relaxed);
+        return;
+    }
+    if (from->addr == to->addr) {
+        atomic_fetch_add_explicit(&arm64_block_stats_hot_trace_edge_reject_self_loop, 1, memory_order_relaxed);
+        return;
+    }
+    if (to->addr < from->addr) {
+        atomic_fetch_add_explicit(&arm64_block_stats_hot_trace_edge_reject_backward, 1, memory_order_relaxed);
+        return;
+    }
+
+    addr_t delta = to->addr - from->addr;
+    if (delta > 64) {
+        atomic_fetch_add_explicit(&arm64_block_stats_hot_trace_edge_reject_far, 1, memory_order_relaxed);
+        return;
+    }
+
+    atomic_fetch_add_explicit(&arm64_block_stats_hot_trace_edge_candidate, 1, memory_order_relaxed);
+    if (to->addr == from->end_addr + 1)
+        atomic_fetch_add_explicit(&arm64_block_stats_hot_trace_edge_candidate_adjacent, 1, memory_order_relaxed);
+    if (delta <= 16)
+        atomic_fetch_add_explicit(&arm64_block_stats_hot_trace_edge_candidate_le16, 1, memory_order_relaxed);
 }
 
 static void arm64_block_stats_record_hot_edge_locked(addr_t from, addr_t to, unsigned slot) {
@@ -273,8 +317,17 @@ void arm64_block_stats_dump_if_enabled(void) {
     }
 
     fprintf(stderr,
-            "ARM64_BLOCK_HOT_STATS hot_trace_enabled=%u block_samples=%llu block_evictions=%llu edge_samples=%llu edge_evictions=%llu trace_edge_same_page=%llu trace_edge_forward_same_page=%llu trace_edge_forward_adjacent=%llu trace_edge_forward_le16=%llu trace_edge_forward_17_64=%llu trace_edge_forward_65_256=%llu trace_edge_forward_gt256=%llu trace_edge_backward_same_page=%llu trace_edge_self_loop=%llu trace_edge_cross_page=%llu trace_edge_unknown_slot=%llu",
+            "ARM64_BLOCK_HOT_STATS hot_trace_enabled=%u hot_trace_edge_samples=%llu hot_trace_edge_candidate=%llu hot_trace_edge_candidate_adjacent=%llu hot_trace_edge_candidate_le16=%llu hot_trace_edge_reject_unknown_slot=%llu hot_trace_edge_reject_self_loop=%llu hot_trace_edge_reject_backward=%llu hot_trace_edge_reject_cross_page=%llu hot_trace_edge_reject_far=%llu block_samples=%llu block_evictions=%llu edge_samples=%llu edge_evictions=%llu trace_edge_same_page=%llu trace_edge_forward_same_page=%llu trace_edge_forward_adjacent=%llu trace_edge_forward_le16=%llu trace_edge_forward_17_64=%llu trace_edge_forward_65_256=%llu trace_edge_forward_gt256=%llu trace_edge_backward_same_page=%llu trace_edge_self_loop=%llu trace_edge_cross_page=%llu trace_edge_unknown_slot=%llu",
             arm64_hot_trace_enabled ? 1u : 0u,
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_hot_trace_edge_samples, memory_order_relaxed),
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_hot_trace_edge_candidate, memory_order_relaxed),
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_hot_trace_edge_candidate_adjacent, memory_order_relaxed),
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_hot_trace_edge_candidate_le16, memory_order_relaxed),
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_hot_trace_edge_reject_unknown_slot, memory_order_relaxed),
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_hot_trace_edge_reject_self_loop, memory_order_relaxed),
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_hot_trace_edge_reject_backward, memory_order_relaxed),
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_hot_trace_edge_reject_cross_page, memory_order_relaxed),
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_hot_trace_edge_reject_far, memory_order_relaxed),
             (unsigned long long)hot_block_samples,
             (unsigned long long)hot_block_evictions,
             (unsigned long long)hot_edge_samples,
@@ -376,6 +429,8 @@ void arm64_block_stats_count_chained_entry(struct fiber_block *from, unsigned lo
     } else {
         atomic_fetch_add_explicit(&arm64_block_stats_trace_edge_cross_page, 1, memory_order_relaxed);
     }
+
+    arm64_block_stats_count_hot_trace_edge(from, to, matched_slot);
 
     arm64_block_stats_hot_lock_acquire();
     arm64_block_stats_record_hot_block_locked(to->addr);
