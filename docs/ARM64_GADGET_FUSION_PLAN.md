@@ -455,6 +455,14 @@ Phase 4 dry-run trace-candidate classification tranche:
 - Node/Bun validation: default `/workspace/tmp/ish-arm64-node-bun-perf-20260517-075634.md` and block-stats `/workspace/tmp/ish-arm64-node-bun-perf-20260517-075720.md` were both **10 / 10 passing**. Aggregated classification from the stats run: `edge_samples=12497734`, `trace_edge_same_page=12455860`, `trace_edge_forward_same_page=9560299` (**76.50%**), `trace_edge_self_loop=2183638` (**17.47%**), `trace_edge_backward_same_page=711923` (**5.70%**), `trace_edge_cross_page=41874` (**0.34%**), and `trace_edge_unknown_slot=0`. This supports a future same-page forward-edge-only first trace prototype and suggests self-loops/backward edges should remain excluded until loop-specific guard behavior is designed.
 - Runtime validation: default full Alpine runtime coverage `/workspace/tmp/ish-arm64-runtime-coverage-20260517-075835.md` was **83 / 83 passing**.
 
+Phase 4 forward-edge distance/adjacency tranche:
+
+- Extended `ARM64_BLOCK_HOT_STATS` with same-page forward-edge guardrail buckets: `trace_edge_forward_adjacent`, `trace_edge_forward_le16`, `trace_edge_forward_17_64`, `trace_edge_forward_65_256`, and `trace_edge_forward_gt256`. `trace_edge_forward_adjacent` uses `to->addr == from->end_addr + 1`; the distance buckets use `to->addr - from->addr` for same-page forward edges.
+- Scope remains stats-only and default-off: no trace builder, no guarded exits, no invalidation epoch changes, and no generated-code behavior changes.
+- Focused smoke: default `/workspace/tmp/arm64-tracedist-default-20260517-081419.log` stayed silent; stats-enabled `/workspace/tmp/arm64-tracedist-enabled-20260517-081419.log` emitted the new adjacency/distance fields.
+- Node/Bun validation: default `/workspace/tmp/ish-arm64-node-bun-perf-20260517-081447.md` and block-stats `/workspace/tmp/ish-arm64-node-bun-perf-20260517-081536.md` were both **10 / 10 passing**. Aggregated same-page-forward bucket evidence from the stats run: `trace_edge_forward_same_page=9563135`, `trace_edge_forward_adjacent=6599987` (**69.01%** of forward edges), `trace_edge_forward_le16=6066876` (**63.44%**), `trace_edge_forward_17_64=3080110` (**32.21%**), `trace_edge_forward_65_256=251698` (**2.63%**), and `trace_edge_forward_gt256=164451` (**1.72%**). This supports keeping any first trace prototype constrained to adjacent or very-near same-page forward edges.
+- Runtime validation: the first default runtime pass stopped around the known intermittent Java mixed-mode row without producing a report; the rerun passed full Alpine runtime coverage **83 / 83** at `/workspace/tmp/ish-arm64-runtime-coverage-20260517-082042.md`.
+
 ## Validation gates
 
 For each implementation tranche:

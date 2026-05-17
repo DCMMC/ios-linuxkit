@@ -106,6 +106,11 @@ static uint64_t arm64_block_stats_hot_edge_samples;
 static uint64_t arm64_block_stats_hot_edge_evictions;
 static _Atomic uint64_t arm64_block_stats_trace_edge_same_page;
 static _Atomic uint64_t arm64_block_stats_trace_edge_forward_same_page;
+static _Atomic uint64_t arm64_block_stats_trace_edge_forward_adjacent;
+static _Atomic uint64_t arm64_block_stats_trace_edge_forward_le16;
+static _Atomic uint64_t arm64_block_stats_trace_edge_forward_17_64;
+static _Atomic uint64_t arm64_block_stats_trace_edge_forward_65_256;
+static _Atomic uint64_t arm64_block_stats_trace_edge_forward_gt256;
 static _Atomic uint64_t arm64_block_stats_trace_edge_backward_same_page;
 static _Atomic uint64_t arm64_block_stats_trace_edge_self_loop;
 static _Atomic uint64_t arm64_block_stats_trace_edge_cross_page;
@@ -263,13 +268,18 @@ void arm64_block_stats_dump_if_enabled(void) {
     }
 
     fprintf(stderr,
-            "ARM64_BLOCK_HOT_STATS block_samples=%llu block_evictions=%llu edge_samples=%llu edge_evictions=%llu trace_edge_same_page=%llu trace_edge_forward_same_page=%llu trace_edge_backward_same_page=%llu trace_edge_self_loop=%llu trace_edge_cross_page=%llu trace_edge_unknown_slot=%llu",
+            "ARM64_BLOCK_HOT_STATS block_samples=%llu block_evictions=%llu edge_samples=%llu edge_evictions=%llu trace_edge_same_page=%llu trace_edge_forward_same_page=%llu trace_edge_forward_adjacent=%llu trace_edge_forward_le16=%llu trace_edge_forward_17_64=%llu trace_edge_forward_65_256=%llu trace_edge_forward_gt256=%llu trace_edge_backward_same_page=%llu trace_edge_self_loop=%llu trace_edge_cross_page=%llu trace_edge_unknown_slot=%llu",
             (unsigned long long)hot_block_samples,
             (unsigned long long)hot_block_evictions,
             (unsigned long long)hot_edge_samples,
             (unsigned long long)hot_edge_evictions,
             (unsigned long long)atomic_load_explicit(&arm64_block_stats_trace_edge_same_page, memory_order_relaxed),
             (unsigned long long)atomic_load_explicit(&arm64_block_stats_trace_edge_forward_same_page, memory_order_relaxed),
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_trace_edge_forward_adjacent, memory_order_relaxed),
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_trace_edge_forward_le16, memory_order_relaxed),
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_trace_edge_forward_17_64, memory_order_relaxed),
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_trace_edge_forward_65_256, memory_order_relaxed),
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_trace_edge_forward_gt256, memory_order_relaxed),
             (unsigned long long)atomic_load_explicit(&arm64_block_stats_trace_edge_backward_same_page, memory_order_relaxed),
             (unsigned long long)atomic_load_explicit(&arm64_block_stats_trace_edge_self_loop, memory_order_relaxed),
             (unsigned long long)atomic_load_explicit(&arm64_block_stats_trace_edge_cross_page, memory_order_relaxed),
@@ -341,10 +351,22 @@ void arm64_block_stats_count_chained_entry(struct fiber_block *from, unsigned lo
         atomic_fetch_add_explicit(&arm64_block_stats_trace_edge_self_loop, 1, memory_order_relaxed);
     } else if (PAGE(from->addr) == PAGE(to->addr)) {
         atomic_fetch_add_explicit(&arm64_block_stats_trace_edge_same_page, 1, memory_order_relaxed);
-        if (to->addr > from->addr)
+        if (to->addr > from->addr) {
+            addr_t delta = to->addr - from->addr;
             atomic_fetch_add_explicit(&arm64_block_stats_trace_edge_forward_same_page, 1, memory_order_relaxed);
-        else
+            if (to->addr == from->end_addr + 1)
+                atomic_fetch_add_explicit(&arm64_block_stats_trace_edge_forward_adjacent, 1, memory_order_relaxed);
+            if (delta <= 16)
+                atomic_fetch_add_explicit(&arm64_block_stats_trace_edge_forward_le16, 1, memory_order_relaxed);
+            else if (delta <= 64)
+                atomic_fetch_add_explicit(&arm64_block_stats_trace_edge_forward_17_64, 1, memory_order_relaxed);
+            else if (delta <= 256)
+                atomic_fetch_add_explicit(&arm64_block_stats_trace_edge_forward_65_256, 1, memory_order_relaxed);
+            else
+                atomic_fetch_add_explicit(&arm64_block_stats_trace_edge_forward_gt256, 1, memory_order_relaxed);
+        } else {
             atomic_fetch_add_explicit(&arm64_block_stats_trace_edge_backward_same_page, 1, memory_order_relaxed);
+        }
     } else {
         atomic_fetch_add_explicit(&arm64_block_stats_trace_edge_cross_page, 1, memory_order_relaxed);
     }
