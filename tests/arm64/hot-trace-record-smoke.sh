@@ -75,12 +75,23 @@ assert_no_arm64_stats() {
     ! grep -Eq 'ARM64_.*STATS' "$out"
 }
 
+run_host_audits() {
+    LANE_NAME=host
+    local matches
+    matches="$(grep -R --line-number --exclude-dir=.git --exclude-dir=build-arm64-linux --exclude-dir=build-arm64-linux-debug 'ISH_ARM64_HOT_TRACE' "$PROJECT_DIR/app" "$PROJECT_DIR/iSH.xcodeproj" 2>/dev/null || true)"
+    if [ -z "$matches" ]; then
+        record_result audit ios-default-off PASS "no app/iSH.xcodeproj references to ISH_ARM64_HOT_TRACE"
+    else
+        record_result audit ios-default-off FAIL "$(printf '%s\n' "$matches" | sed -n '1,12p')"
+    fi
+}
+
 run_lane() {
     LANE_NAME="$1"
     ROOTFS="$2"
     [ -d "$ROOTFS" ] || { echo "missing rootfs for lane $LANE_NAME: $ROOTFS" >&2; return 1; }
 
-    local out value created retired attempts
+    local out value created retired attempts live retire_page retire_source retire_target
 
     out="$HOST_TMP/${LANE_NAME}-default.out"
     if guest_capture "$out" "" "node -e 'console.log(2+2)'" && has_clean_status "$out" && assert_no_arm64_stats "$out"; then
@@ -116,15 +127,26 @@ run_lane() {
         attempts="$(stat_field "$out" hot_trace_record_create_attempts || true)"
         created="$(stat_field "$out" hot_trace_record_created || true)"
         retired="$(stat_field "$out" hot_trace_record_retired || true)"
-        if [ "$value" = 1 ] && [ "${attempts:-0}" -gt 0 ] && [ "${created:-0}" -gt 0 ] && [ "${retired:-0}" -gt 0 ]; then
-            record_result counters stats-hot-trace-records PASS "hot_trace_record_create_attempts=$attempts hot_trace_record_created=$created hot_trace_record_retired=$retired"
+        live="$(stat_field "$out" hot_trace_record_live || true)"
+        retire_page="$(stat_field "$out" hot_trace_record_retire_page || true)"
+        retire_source="$(stat_field "$out" hot_trace_record_retire_source || true)"
+        retire_target="$(stat_field "$out" hot_trace_record_retire_target || true)"
+        if [ "$value" = 1 ] && [ "${attempts:-0}" -gt 0 ] && [ "${created:-0}" -gt 0 ] && [ "${created:-0}" -le 8192 ] && [ "${retired:-0}" -gt 0 ]; then
+            record_result counters stats-hot-trace-records PASS "hot_trace_record_create_attempts=$attempts hot_trace_record_created=$created hot_trace_record_live=$live hot_trace_record_retired=$retired"
         else
-            record_result counters stats-hot-trace-records FAIL "hot_trace_enabled=${value:-missing} hot_trace_record_create_attempts=${attempts:-missing} hot_trace_record_created=${created:-missing} hot_trace_record_retired=${retired:-missing}"
+            record_result counters stats-hot-trace-records FAIL "hot_trace_enabled=${value:-missing} hot_trace_record_create_attempts=${attempts:-missing} hot_trace_record_created=${created:-missing} hot_trace_record_live=${live:-missing} hot_trace_record_retired=${retired:-missing}"
+        fi
+        if [ "${retire_page:-0}" -gt 0 ] && [ $(( ${retire_source:-0} + ${retire_target:-0} )) -gt 0 ]; then
+            record_result counters stats-hot-trace-retirement-paths PASS "hot_trace_record_retire_page=$retire_page hot_trace_record_retire_source=$retire_source hot_trace_record_retire_target=$retire_target"
+        else
+            record_result counters stats-hot-trace-retirement-paths FAIL "hot_trace_record_retire_page=${retire_page:-missing} hot_trace_record_retire_source=${retire_source:-missing} hot_trace_record_retire_target=${retire_target:-missing}"
         fi
     else
         record_result counters stats-hot-trace-records FAIL "$(grep -v '^__ISH_STATUS:' "$out" | sed -n '1,16p')"
     fi
 }
+
+run_host_audits
 
 for lane in $ROOTFS_LANES; do
     run_lane "${lane%%=*}" "${lane#*=}"
