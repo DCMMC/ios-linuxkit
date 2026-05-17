@@ -336,7 +336,7 @@ The practical host-facing ABI is now:
 
 - Linux/local env gates in `main.c` parse `ISH_ARM64_FUSION_STATS`, `ISH_ARM64_BLOCK_STATS`, and the dormant dry-run `ISH_ARM64_HOT_TRACE` flag.
 - `ISH_ARM64_BLOCK_STATS=1` emits block/chaining/hot-edge diagnostics at process exit.
-- `ISH_ARM64_HOT_TRACE=1` is only meaningful with block stats today; it enables candidate classification/table output for future trace design but does not build traces, add guarded exits, change invalidation epochs, or change generated gadget streams.
+- `ISH_ARM64_HOT_TRACE=1` enables non-executing Phase 4 diagnostics: candidate classification/table output and bounded adjacent trace-record sidecar metadata for future guarded trace design. It does not execute traces, add guarded exits, change invalidation epochs, allocate executable memory, store trace/interior targets in normal chaining slots, or change generated gadget streams.
 - Diagnostic `ARM64_*_STATS` output is intentionally kept out of exact-output runtime coverage gates.
 
 ### Runtime compatibility shims

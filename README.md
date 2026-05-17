@@ -30,7 +30,7 @@ See [runtime validation](docs/RUNTIME_VALIDATION.md) for commands, reports, and 
 
 ## Executor optimization status
 
-ARM64 executor speed work is documented in [ARM64_GADGET_FUSION_PLAN.md](docs/ARM64_GADGET_FUSION_PLAN.md). Current Phase 4 hot-trace work is deliberately measurement-only and default-off: `ISH_ARM64_BLOCK_STATS=1 ISH_ARM64_HOT_TRACE=1` records candidate-edge counters/table output for future design, but the runtime does not build or execute traces, add guarded exits, change invalidation epochs, allocate executable memory, or change generated gadget streams.
+ARM64 executor speed work is documented in [ARM64_GADGET_FUSION_PLAN.md](docs/ARM64_GADGET_FUSION_PLAN.md). Current Phase 4 hot-trace work is deliberately non-executing and default-off: `ISH_ARM64_BLOCK_STATS=1 ISH_ARM64_HOT_TRACE=1` records candidate-edge counters plus bounded adjacent trace-record sidecar diagnostics for future guarded trace design, but the runtime does not execute traces, add guarded exits, change invalidation epochs, allocate executable memory, store trace/interior targets in `jump_ip`, or change generated gadget streams.
 
 ## Validation host
 
