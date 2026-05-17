@@ -38,6 +38,9 @@ typedef struct linux_tty *tty_t;
 @property DelayedUITask *scrollToBottomTask;
 
 @property BOOL applicationCursor;
+@property (nonatomic) NSUInteger windowSizeRequestID;
+@property (nonatomic) int lastWindowCols;
+@property (nonatomic) int lastWindowRows;
 
 @property NSNumber *terminalsKey;
 @property NSUUID *uuid;
@@ -130,6 +133,9 @@ static NSMapTable<NSUUID *, Terminal *> *terminalsByUUID;
 - (void)setTty:(tty_t)tty {
     @synchronized (self) {
         _tty = tty;
+        _lastWindowCols = 0;
+        _lastWindowRows = 0;
+        _windowSizeRequestID++;
     }
     dispatch_async(dispatch_get_main_queue(), ^{
         [self syncWindowSize];
@@ -167,6 +173,10 @@ static NSMapTable<NSUUID *, Terminal *> *terminalsByUUID;
 }
 
 - (void)syncWindowSize {
+    NSUInteger requestID;
+    @synchronized (self) {
+        requestID = ++_windowSizeRequestID;
+    }
     [self.webView evaluateJavaScript:@"exports.getSize()" completionHandler:^(NSArray<NSNumber *> *dimensions, NSError *error) {
         if (error != nil || ![dimensions isKindOfClass:NSArray.class] || dimensions.count < 2 ||
             ![dimensions[0] isKindOfClass:NSNumber.class] || ![dimensions[1] isKindOfClass:NSNumber.class])
@@ -175,10 +185,16 @@ static NSMapTable<NSUUID *, Terminal *> *terminalsByUUID;
         int rows = dimensions[1].intValue;
         tty_t tty;
         @synchronized (self) {
+            if (requestID != self->_windowSizeRequestID)
+                return;
             tty = self->_tty;
+            if (cols <= 0 || rows <= 0 || tty == NULL)
+                return;
+            if (cols == self->_lastWindowCols && rows == self->_lastWindowRows)
+                return;
+            self->_lastWindowCols = cols;
+            self->_lastWindowRows = rows;
         }
-        if (cols <= 0 || rows <= 0 || tty == NULL)
-            return;
 #if !ISH_LINUX
         lock(&tty->lock);
         tty_set_winsize(tty, (struct winsize_) {.col = cols, .row = rows});

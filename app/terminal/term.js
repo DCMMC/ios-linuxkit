@@ -1,169 +1,337 @@
-hterm.defaultStorage = new lib.Storage.Memory();
-window.onload = async function() {
-    await lib.init();
-    window.term = new hterm.Terminal();
+import { init, Terminal } from './ghostty-web.js';
 
-    // make everything invisible so as to not be embarrassing
-    term.getPrefs().set('background-color', 'transparent');
-    term.getPrefs().set('foreground-color', 'transparent');
-    term.getPrefs().set('cursor-color', 'transparent');
+const terminalElement = document.getElementById('terminal');
+const ansiColorNames = [
+    'black',
+    'red',
+    'green',
+    'yellow',
+    'blue',
+    'magenta',
+    'cyan',
+    'white',
+    'brightBlack',
+    'brightRed',
+    'brightGreen',
+    'brightYellow',
+    'brightBlue',
+    'brightMagenta',
+    'brightCyan',
+    'brightWhite',
+];
 
-    term.getPrefs().set('terminal-encoding', 'iso-2022');
-    term.getPrefs().set('enable-resize-status', false);
-    term.getPrefs().set('copy-on-select', false);
-    term.getPrefs().set('enable-clipboard-notice', false);
-    term.getPrefs().set('user-css-text', termCss);
-    term.getPrefs().set('screen-padding-size', 4);
-    // Creating and preloading the <audio> element for this sometimes hangs WebKit on iOS 16 for some reason.
-    term.getPrefs().set('audible-bell-sound', '');
+let term;
+let styleState = {
+    foregroundColor: '#f0f0f0',
+    backgroundColor: '#000000',
+    cursorColor: undefined,
+    fontFamily: 'FiraCode Nerd Font Mono, monospace',
+    fontSize: 15,
+    colorPaletteOverrides: undefined,
+    blinkCursor: false,
+    cursorShape: 'BLOCK',
+};
+let resizeObserver;
+let pendingFit = false;
+let pendingScrollSync = false;
+let lastNativeScrollHeight;
+let lastNativeScrollTop;
+let oldProps = {};
 
-    term.onTerminalReady = onTerminalReady;
-    term.decorate(document.getElementById('terminal'));
+// Functions for native -> JS.  Define this immediately so early native calls
+// fail closed instead of throwing while the module/WASM is still loading.
+window.exports = {
+    write() {},
+    getSize: () => [0, 0],
+    copy: () => false,
+    setFocused() {},
+    scrollToBottom() {},
+    newScrollTop() {},
+    updateStyle(nextStyle) {
+        styleState = {...styleState, ...nextStyle};
+    },
+    getCharacterSize: () => [0, 0],
+    clearScrollback() {},
+    setUserGesture() {},
+    setAccessibilityEnabled() {},
 };
 
-var termCss = `
-x-screen {
-    background: transparent !important;
-    overflow: hidden !important;
-    -webkit-tap-highlight-color: transparent;
-}
-x-row {
-  text-rendering: optimizeLegibility;
-  font-variant-ligatures: normal;
-}
-.uri-node {
-  text-decoration: underline;
-}
-`;
-
-function onTerminalReady() {
-
-// Shorthand for JS -> native IPC
 const native = new Proxy({}, {
-    get(obj, prop) {
+    get(_obj, prop) {
         return (...args) => {
-            if (args.length == 0)
-                args = null;
-            else if (args.length == 1)
-                args = args[0];
-            webkit.messageHandlers[prop].postMessage(args);
+            if (!window.webkit?.messageHandlers?.[prop])
+                return;
+            let body = null;
+            if (args.length == 1)
+                body = args[0];
+            else if (args.length > 1)
+                body = args;
+            webkit.messageHandlers[prop].postMessage(body);
         };
     },
 });
 
-// Functions for native -> JS
-window.exports = {};
+window.addEventListener('error', (event) => {
+    native.log(`terminal frontend error: ${event.message}`);
+});
+window.addEventListener('unhandledrejection', (event) => {
+    native.log(`terminal frontend rejection: ${event.reason}`);
+});
 
-term.io.push();
-term.reset();
+window.addEventListener('load', async () => {
+    try {
+        if (document.fonts?.ready)
+            await document.fonts.ready;
 
-let oldProps = {};
+        await init('./ghostty-vt.wasm');
+
+        term = new Terminal({
+            cols: 80,
+            rows: 24,
+            allowTransparency: true,
+            cursorBlink: styleState.blinkCursor,
+            cursorStyle: cursorStyleForGhostty(styleState.cursorShape),
+            fontFamily: styleState.fontFamily,
+            fontSize: styleState.fontSize,
+            scrollbarWidth: 0,
+            smoothScrollDuration: 0,
+            theme: themeForGhostty(styleState),
+        });
+        window.term = term;
+
+        term.onData((data) => {
+            native.sendInput(data);
+            syncApplicationCursor();
+        });
+        term.onResize(() => {
+            native.resize();
+            scheduleScrollSync();
+        });
+        term.onScroll(scheduleScrollSync);
+        term.onCursorMove(syncApplicationCursor);
+
+        term.open(terminalElement);
+        installBridgeExports();
+        installFocusBridge();
+        installResizeBridge();
+        fitTerminal();
+        syncApplicationCursor();
+        scheduleScrollSync();
+
+        native.load();
+        native.syncFocus();
+    } catch (error) {
+        native.log(`terminal frontend failed to load: ${error?.stack || error}`);
+        throw error;
+    }
+});
+
+function installBridgeExports() {
+    window.exports.write = (data) => {
+        const bytes = latin1StringToBytes(data);
+        term.write(bytes);
+        syncApplicationCursor();
+        scheduleScrollSync();
+    };
+
+    window.exports.getSize = () => [term.cols, term.rows];
+
+    window.exports.copy = () => term.copySelection();
+
+    window.exports.setFocused = (focus) => {
+        if (focus)
+            term.focus();
+        else
+            term.blur();
+    };
+
+    window.exports.scrollToBottom = () => {
+        term.scrollToBottom();
+        scheduleScrollSync();
+    };
+
+    window.exports.newScrollTop = (y) => {
+        if (!Number.isFinite(y))
+            return;
+        const metrics = term.renderer?.getMetrics();
+        const cellHeight = metrics?.height || 1;
+        const scrollback = term.getScrollbackLength();
+        const viewportY = scrollback - (y / cellHeight);
+        term.scrollToLine(Math.round(viewportY));
+        scheduleScrollSync();
+    };
+
+    window.exports.updateStyle = async (nextStyle) => {
+        styleState = {...styleState, ...nextStyle};
+        await loadConfiguredFont(styleState);
+
+        term.options.fontFamily = styleState.fontFamily;
+        term.options.fontSize = styleState.fontSize;
+        term.options.cursorBlink = !!styleState.blinkCursor;
+        term.options.cursorStyle = cursorStyleForGhostty(styleState.cursorShape);
+        term.options.theme = themeForGhostty(styleState);
+
+        fitTerminal();
+        scheduleScrollSync();
+    };
+
+    window.exports.getCharacterSize = () => {
+        const metrics = term.renderer?.getMetrics();
+        return [metrics?.width || 0, metrics?.height || 0];
+    };
+
+    window.exports.clearScrollback = () => {
+        term.write('\x1b[3J');
+        term.scrollToBottom();
+        scheduleScrollSync();
+    };
+
+    window.exports.setUserGesture = () => {};
+    window.exports.setAccessibilityEnabled = () => {};
+}
+
+function installFocusBridge() {
+    terminalElement.addEventListener('mousedown', (event) => {
+        if (term.hasSelection())
+            return;
+        native.focus();
+    });
+    terminalElement.addEventListener('touchend', () => native.focus());
+    terminalElement.addEventListener('focus', () => native.syncFocus());
+    terminalElement.addEventListener('blur', () => native.syncFocus());
+}
+
+function installResizeBridge() {
+    resizeObserver = new ResizeObserver(() => scheduleFit());
+    resizeObserver.observe(terminalElement);
+    window.addEventListener('resize', scheduleFit);
+}
+
+function scheduleFit() {
+    if (pendingFit)
+        return;
+    pendingFit = true;
+    requestAnimationFrame(() => {
+        pendingFit = false;
+        fitTerminal();
+    });
+}
+
+function fitTerminal() {
+    if (!term?.renderer || !terminalElement)
+        return;
+
+    const metrics = term.renderer.getMetrics();
+    if (!metrics.width || !metrics.height)
+        return;
+
+    const width = terminalElement.clientWidth;
+    const height = terminalElement.clientHeight;
+    if (width <= 0 || height <= 0)
+        return;
+
+    const cols = Math.max(2, Math.floor(width / metrics.width));
+    const rows = Math.max(1, Math.floor(height / metrics.height));
+    if (cols != term.cols || rows != term.rows)
+        term.resize(cols, rows);
+
+    native.resize();
+    scheduleScrollSync();
+}
+
+function scheduleScrollSync() {
+    if (pendingScrollSync)
+        return;
+    pendingScrollSync = true;
+    requestAnimationFrame(() => {
+        pendingScrollSync = false;
+        syncScroll();
+    });
+}
+
+function syncScroll() {
+    if (!term?.renderer)
+        return;
+
+    const metrics = term.renderer.getMetrics();
+    const scrollback = term.getScrollbackLength();
+    const scrollHeight = (scrollback + term.rows) * metrics.height;
+    const scrollTop = (scrollback - term.getViewportY()) * metrics.height;
+
+    if (scrollHeight !== lastNativeScrollHeight) {
+        native.newScrollHeight(scrollHeight);
+        lastNativeScrollHeight = scrollHeight;
+    }
+    if (scrollTop !== lastNativeScrollTop) {
+        native.newScrollTop(scrollTop);
+        lastNativeScrollTop = scrollTop;
+    }
+}
+
+function syncApplicationCursor() {
+    if (!term)
+        return;
+    syncProp('applicationCursor', term.getMode(1, false));
+}
+
 function syncProp(name, value) {
     if (oldProps[name] !== value)
         native.propUpdate(name, value);
     oldProps[name] = value;
 }
-let decoder = new TextDecoder();
-exports.write = (data) => {
-    term.io.writeUTF16(decoder.decode(lib.codec.stringToCodeUnitArray(data)));
-    syncProp('applicationCursor', term.keyboard.applicationCursor);
-};
-term.io.sendString = term.io.onVTKeyStroke = (data) => {
-    native.sendInput(data);
-};
 
-// hterm size updates native size
-term.io.onTerminalResize = () => native.resize();
-exports.getSize = () => [term.screenSize.width, term.screenSize.height];
-
-// selection, copying
-term.scrollPort_.screen_.contentEditable = false;
-term.blur();
-term.focus();
-exports.copy = () => term.copySelectionToClipboard();
-
-// focus
-// This listener blocks blur events that come in because the webview has lost first responder
-term.scrollPort_.screen_.addEventListener('blur', (e) => {
-    if (e.target.ownerDocument.activeElement == e.target) {
-        e.stopPropagation();
-    }
-}, {capture: true});
-term.scrollPort_.screen_.addEventListener('mousedown', (e) => {
-    // Taps while there is a selection should be left to the selection view
-    if ((document.getSelection().rangeCount != 0) &&
-        (!document.getSelection().isCollapsed)) return;
-    native.focus();
-});
-exports.setFocused = (focus) => {
-    if (focus)
-        term.focus();
-    else
-        term.blur();
-};
-term.scrollPort_.screen_.addEventListener('focus', (e) => native.syncFocus());
-
-// scrolling
-// Disable hterm builtin touch scrolling
-term.scrollPort_.onTouch = (e) => {
-    // Convince hterm that we called preventDefault() and that it shouldn't do more handling, but don't actually call it because that would break text selection
-    Object.defineProperty(e, 'defaultPrevented', {value: true});
-};
-// Scroll to bottom wrapper
-exports.scrollToBottom = () => term.scrollEnd();
-// Set scroll position
-exports.newScrollTop = (y) => {
-    // two lines instead of one because the value you read out of scrollTop can be different from the value you write into it
-    term.scrollPort_.screen_.scrollTop = y;
-    lastScrollTop = term.scrollPort_.screen_.scrollTop;
-};
-
-// Send scroll height and position to native code
-let lastScrollHeight, lastScrollTop;
-function syncScroll() {
-    const scrollHeight = parseFloat(term.scrollPort_.scrollArea_.style.height);
-    if (scrollHeight != lastScrollHeight)
-        native.newScrollHeight(scrollHeight);
-    lastScrollHeight = scrollHeight;
-
-    const scrollTop = term.scrollPort_.screen_.scrollTop;
-    if (scrollTop != lastScrollTop)
-        native.newScrollTop(scrollTop);
-    lastScrollTop = scrollTop;
+function latin1StringToBytes(data) {
+    const bytes = new Uint8Array(data.length);
+    for (let i = 0; i < data.length; i++)
+        bytes[i] = data.charCodeAt(i) & 0xff;
+    return bytes;
 }
 
-const realSyncScrollHeight = hterm.ScrollPort.prototype.syncScrollHeight;
-hterm.ScrollPort.prototype.syncScrollHeight = function() {
-    realSyncScrollHeight.call(this);
-    syncScroll();
-};
-term.scrollPort_.screen_.addEventListener('scroll', syncScroll);
+async function loadConfiguredFont(style) {
+    if (!document.fonts?.load)
+        return;
+    try {
+        await document.fonts.load(`${style.fontSize}px ${quoteFontFamily(style.fontFamily)}`);
+    } catch (error) {
+        native.log(`terminal font load failed: ${error}`);
+    }
+}
 
-exports.updateStyle = ({foregroundColor, backgroundColor, cursorColor, fontFamily, fontSize, colorPaletteOverrides, blinkCursor, cursorShape}) => {
-    term.getPrefs().set('background-color', backgroundColor);
-    term.getPrefs().set('foreground-color', foregroundColor);
-    term.getPrefs().set('cursor-color', cursorColor || foregroundColor);
-    term.getPrefs().set('font-family', fontFamily);
-    term.getPrefs().set('font-size', fontSize);
-    term.getPrefs().set('color-palette-overrides', colorPaletteOverrides);
-    term.getPrefs().set('cursor-blink', blinkCursor);
-    term.getPrefs().set('cursor-shape', cursorShape);
-};
+function quoteFontFamily(family) {
+    return family.split(',')
+        .map((part) => {
+            const trimmed = part.trim();
+            if (!trimmed.includes(' ') || trimmed.startsWith('"') || trimmed.startsWith("'"))
+                return trimmed;
+            return `"${trimmed}"`;
+        })
+        .join(', ');
+}
 
-exports.getCharacterSize = () => {
-    return [term.scrollPort_.characterSize.width, term.scrollPort_.characterSize.height];
-};
+function cursorStyleForGhostty(cursorShape) {
+    switch (cursorShape) {
+        case 'BEAM':
+        case 'bar':
+            return 'bar';
+        case 'UNDERLINE':
+        case 'underline':
+            return 'underline';
+        case 'BLOCK':
+        case 'block':
+        default:
+            return 'block';
+    }
+}
 
-exports.clearScrollback = () => term.clearScrollback();
-exports.setUserGesture = () => term.accessibilityReader_.hasUserGesture = true;
-exports.setAccessibilityEnabled = (enabled) => {
-    if (term.accessibilityReader_)
-        term.accessibilityReader_.accessibilityEnabled = enabled;
-};
-
-hterm.openUrl = (url) => native.openLink(url);
-
-native.load();
-native.syncFocus();
-
+function themeForGhostty(style) {
+    const theme = {
+        foreground: style.foregroundColor,
+        background: style.backgroundColor,
+        cursor: style.cursorColor || style.foregroundColor,
+    };
+    if (Array.isArray(style.colorPaletteOverrides)) {
+        for (let i = 0; i < Math.min(ansiColorNames.length, style.colorPaletteOverrides.length); i++)
+            theme[ansiColorNames[i]] = style.colorPaletteOverrides[i];
+    }
+    return theme;
 }

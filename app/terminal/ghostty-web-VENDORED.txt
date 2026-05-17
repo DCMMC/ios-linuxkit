@@ -1,6 +1,6 @@
 ghostty-web vendored from https://github.com/rcarmo/ghostty-web
-Commit: b6b243d7f380f8307e375719968f6046f1102c48
-Version: 0.8.1
+Commit: f82a69cf82d54aeaba35d2a4165a58e33bbb93c2
+Version: 0.8.2
 
 Vendored files:
 - ghostty-web.js: ESM browser bundle used by app/terminal/term.js

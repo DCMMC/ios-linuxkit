@@ -34,6 +34,10 @@ body {
     right: 0;
     overflow: hidden;
     background: transparent;
+    outline: none;
+    text-rendering: optimizeLegibility;
+    font-variant-ligatures: normal;
+    -webkit-font-smoothing: antialiased;
 }
 
 #terminal canvas {
