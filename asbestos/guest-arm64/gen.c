@@ -70,6 +70,12 @@ static uint64_t arm64_fusion_ldr32_sx_cbz64_candidate_count;
 static uint64_t arm64_fusion_ldr16_sx_cbz_candidate_count;
 static uint64_t arm64_fusion_ldr8_sx_cbz_candidate_count;
 static uint64_t arm64_internal_continue_count;
+static uint64_t arm64_internal_continue_bcond_fallthrough_count;
+static uint64_t arm64_internal_continue_bcond_taken_count;
+static uint64_t arm64_internal_continue_cbz_fallthrough_count;
+static uint64_t arm64_internal_continue_cbz_taken_count;
+static uint64_t arm64_internal_continue_tbz_fallthrough_count;
+static uint64_t arm64_internal_continue_tbz_taken_count;
 static bool arm64_fusion_stats_dumped;
 
 void arm64_fusion_stats_dump_if_enabled(void) {
@@ -77,7 +83,7 @@ void arm64_fusion_stats_dump_if_enabled(void) {
         return;
     arm64_fusion_stats_dumped = true;
     fprintf(stderr,
-            "ARM64_FUSION_STATS cmp_bcond=%llu subs_bcond=%llu adrp_add=%llu adrp_ldr64=%llu addsub_fast=%llu addsub_cbz=%llu addsub_ldr64=%llu addsub_ldr32=%llu addsub_ldr16=%llu addsub_ldr8=%llu addsub_str64=%llu addsub_str32=%llu addsub_str16=%llu addsub_str8=%llu ldr64_cbz64=%llu ldr64_sp_cbz64=%llu ldr32_sx_cbz64=%llu ldr16_sx_cbz=%llu ldr8_sx_cbz=%llu ldr32_cbz32=%llu ldr16_cbz32=%llu ldr8_cbz32=%llu addsub_ldr_cand=%llu addsub_str_cand=%llu ldr_cbz_cand=%llu ldr64_cbz64_cand=%llu ldr64_sp_cbz64_cand=%llu ldr32_sx_cbz64_cand=%llu ldr16_sx_cbz_cand=%llu ldr8_sx_cbz_cand=%llu internal_continue=%llu\n",
+            "ARM64_FUSION_STATS cmp_bcond=%llu subs_bcond=%llu adrp_add=%llu adrp_ldr64=%llu addsub_fast=%llu addsub_cbz=%llu addsub_ldr64=%llu addsub_ldr32=%llu addsub_ldr16=%llu addsub_ldr8=%llu addsub_str64=%llu addsub_str32=%llu addsub_str16=%llu addsub_str8=%llu ldr64_cbz64=%llu ldr64_sp_cbz64=%llu ldr32_sx_cbz64=%llu ldr16_sx_cbz=%llu ldr8_sx_cbz=%llu ldr32_cbz32=%llu ldr16_cbz32=%llu ldr8_cbz32=%llu addsub_ldr_cand=%llu addsub_str_cand=%llu ldr_cbz_cand=%llu ldr64_cbz64_cand=%llu ldr64_sp_cbz64_cand=%llu ldr32_sx_cbz64_cand=%llu ldr16_sx_cbz_cand=%llu ldr8_sx_cbz_cand=%llu internal_continue=%llu internal_continue_bcond_fallthrough=%llu internal_continue_bcond_taken=%llu internal_continue_cbz_fallthrough=%llu internal_continue_cbz_taken=%llu internal_continue_tbz_fallthrough=%llu internal_continue_tbz_taken=%llu\n",
             (unsigned long long)arm64_fusion_cmp_bcond_count,
             (unsigned long long)arm64_fusion_subs_bcond_count,
             (unsigned long long)arm64_fusion_adrp_add_count,
@@ -108,7 +114,13 @@ void arm64_fusion_stats_dump_if_enabled(void) {
             (unsigned long long)arm64_fusion_ldr32_sx_cbz64_candidate_count,
             (unsigned long long)arm64_fusion_ldr16_sx_cbz_candidate_count,
             (unsigned long long)arm64_fusion_ldr8_sx_cbz_candidate_count,
-            (unsigned long long)arm64_internal_continue_count);
+            (unsigned long long)arm64_internal_continue_count,
+            (unsigned long long)arm64_internal_continue_bcond_fallthrough_count,
+            (unsigned long long)arm64_internal_continue_bcond_taken_count,
+            (unsigned long long)arm64_internal_continue_cbz_fallthrough_count,
+            (unsigned long long)arm64_internal_continue_cbz_taken_count,
+            (unsigned long long)arm64_internal_continue_tbz_fallthrough_count,
+            (unsigned long long)arm64_internal_continue_tbz_taken_count);
     fflush(stderr);
 }
 
@@ -127,6 +139,11 @@ void arm64_internal_continue_taken_set_enabled_from_env(const char *env) {
 #define ARM64_FUSION_STAT_INC(counter) do { \
     if (arm64_fusion_stats_enabled) \
         (counter)++; \
+} while (0)
+
+#define ARM64_INTERNAL_CONTINUE_STAT_INC(counter) do { \
+    ARM64_FUSION_STAT_INC(arm64_internal_continue_count); \
+    ARM64_FUSION_STAT_INC(counter); \
 } while (0)
 
 // Data processing gadgets
@@ -2445,7 +2462,7 @@ static int gen_branch(struct gen_state *state, uint32_t insn) {
                         !gen_emit_internal_continue_record(state, target)) {
                     abort();
                 }
-                ARM64_FUSION_STAT_INC(arm64_internal_continue_count);
+                ARM64_INTERNAL_CONTINUE_STAT_INC(arm64_internal_continue_bcond_taken_count);
                 state->internal_continue_used = 1;
                 state->internal_continue_segment_start = target;
                 state->internal_continue_segment_budget = GEN_INTERNAL_CONTINUE_BUDGET_INSNS;
@@ -2467,7 +2484,7 @@ static int gen_branch(struct gen_state *state, uint32_t insn) {
                     !gen_emit_internal_continue_record(state, state->ip)) {
                 abort();
             }
-            ARM64_FUSION_STAT_INC(arm64_internal_continue_count);
+            ARM64_INTERNAL_CONTINUE_STAT_INC(arm64_internal_continue_bcond_fallthrough_count);
             state->internal_continue_used = 1;
             state->internal_continue_segment_start = state->ip;
             state->internal_continue_segment_budget = GEN_INTERNAL_CONTINUE_BUDGET_INSNS;
@@ -2515,7 +2532,7 @@ static int gen_branch(struct gen_state *state, uint32_t insn) {
                         !gen_emit_internal_continue_record(state, target)) {
                     abort();
                 }
-                ARM64_FUSION_STAT_INC(arm64_internal_continue_count);
+                ARM64_INTERNAL_CONTINUE_STAT_INC(arm64_internal_continue_cbz_taken_count);
                 state->internal_continue_used = 1;
                 state->internal_continue_segment_start = target;
                 state->internal_continue_segment_budget = GEN_INTERNAL_CONTINUE_BUDGET_INSNS;
@@ -2536,7 +2553,7 @@ static int gen_branch(struct gen_state *state, uint32_t insn) {
                     !gen_emit_internal_continue_record(state, state->ip)) {
                 abort();
             }
-            ARM64_FUSION_STAT_INC(arm64_internal_continue_count);
+            ARM64_INTERNAL_CONTINUE_STAT_INC(arm64_internal_continue_cbz_fallthrough_count);
             state->internal_continue_used = 1;
             state->internal_continue_segment_start = state->ip;
             state->internal_continue_segment_budget = GEN_INTERNAL_CONTINUE_BUDGET_INSNS;
@@ -2603,7 +2620,7 @@ static int gen_branch(struct gen_state *state, uint32_t insn) {
                         !gen_emit_internal_continue_record(state, target)) {
                     abort();
                 }
-                ARM64_FUSION_STAT_INC(arm64_internal_continue_count);
+                ARM64_INTERNAL_CONTINUE_STAT_INC(arm64_internal_continue_tbz_taken_count);
                 state->internal_continue_used = 1;
                 state->internal_continue_segment_start = target;
                 state->internal_continue_segment_budget = GEN_INTERNAL_CONTINUE_BUDGET_INSNS;
@@ -2624,7 +2641,7 @@ static int gen_branch(struct gen_state *state, uint32_t insn) {
                     !gen_emit_internal_continue_record(state, state->ip)) {
                 abort();
             }
-            ARM64_FUSION_STAT_INC(arm64_internal_continue_count);
+            ARM64_INTERNAL_CONTINUE_STAT_INC(arm64_internal_continue_tbz_fallthrough_count);
             state->internal_continue_used = 1;
             state->internal_continue_segment_start = state->ip;
             state->internal_continue_segment_budget = GEN_INTERNAL_CONTINUE_BUDGET_INSNS;
