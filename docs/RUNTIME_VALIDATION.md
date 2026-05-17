@@ -1,209 +1,70 @@
 # ios-linuxkit runtime validation
 
-This document preserves the detailed runtime validation baseline for ios-linuxkit. The top-level README stays concise; this file tracks the staged ARM64 runtime gate, workload smoke tests, executor experiments, and failure interpretation notes.
+This file describes the validation gates used before advertising a runtime change. It is a workflow reference, not a changelog.
 
-Supporting documentation: [ARM64 backend](ARM64_BACKEND.md), [workload smoke tests](ARM64_WORKLOAD_SMOKE_TESTS.md), [executor roadmap](ARM64_GADGET_FUSION_PLAN.md), and [original iSH README](ORIGINAL_ISH_README.md).
+## Baseline
 
-## Current validation baseline
+| Item | Value |
+|---|---|
+| Core report | `/workspace/tmp/ish-arm64-runtime-coverage-20260516-211305.md` |
+| Core result | **83 / 83 passing** |
+| Binary | `build-arm64-linux/ish` |
+| Rootfs | `alpine-arm64-fakefs` |
+| Timeouts | `TIMEOUT_S=180`, `INSTALL_TIMEOUT_S=1200` |
+| Required diagnostics | `SAFETY-VALVE=0`, `NETDIAG=0` in clean core logs |
 
-Latest staged runtime report: **83 / 83 passing**
+Related docs: [workload smoke tests](ARM64_WORKLOAD_SMOKE_TESTS.md), [syscall coverage ledger](ARM64_SMOKE_ISSUES_AND_SYSCALL_COVERAGE.md), [executor plan](ARM64_GADGET_FUSION_PLAN.md).
 
-- Report: `/workspace/tmp/ish-arm64-runtime-coverage-20260516-211305.md`
-- Binary: `build-arm64-linux/ish`
-- Rootfs: `alpine-arm64-fakefs`
-- Timeout: `TIMEOUT_S=180`
-- Install timeout: `INSTALL_TIMEOUT_S=1200`
-- `SAFETY-VALVE` diagnostics in report: **0**
-- `NETDIAG` diagnostics in report: **0**
+## Gates
 
-AI CLI runtime coverage is tracked as a separate second-stage suite because it installs fast-moving agent packages and should not contaminate the stable core gate. Latest Alpine npm-only report: **16 / 16 passing** at `/workspace/tmp/ish-arm64-ai-cli-runtime-coverage-20260515-200605.md`, now including the community `grok-cli` Grok/xAI proxy wrapper. The Claude Code standalone Bun binary crash was traced to high-address `MAP_NORESERVE` reservation overlap; high-hole allocation and alignment are now reservation-aware. Debian AI CLI remains a background lane while glibc thread creation is still blocked by `pthread_create()`/libuv assertions.
-
-This document reflects the validation sequence after tagged point `arm64-openjdk21-prod-20260513-r6`, including the later Rust/Cargo and socket ABI audit fixes, lane-aware runtime coverage, `fchmodat2(AT_EMPTY_PATH)`, reservation-aware high-address `MAP_NORESERVE` handling, and the separate AI CLI coverage harness.
-
-## Quick start
-
-Build both Linux ARM64 variants:
-
-```bash
-make build-arm64-linux-all
-```
-
-Run the staged runtime coverage gate (defaults to all configured lanes; use `ROOTFS_LANES=alpine=$(pwd)/alpine-arm64-fakefs` for the current Alpine-only baseline):
-
-```bash
-make test-arm64-runtime-coverage REPORT_DIR=/workspace/tmp TIMEOUT_S=180 INSTALL_TIMEOUT_S=1200
-```
-
-Run the focused Node/Bun perf table before and after executor optimization work. Latest baseline: **10 / 10 passing** at `/workspace/tmp/ish-arm64-node-bun-perf-20260515-213520.md`. To include opt-in ARM64 peephole generation counters, set `ISH_ARM64_FUSION_STATS=1`; the first counter-enabled run is `/workspace/tmp/ish-arm64-node-bun-perf-20260515-214650.md`. The table validates expected Node/Bun output as well as exit status. Latest Phase 3A refined reconnaissance-counter validation: fusion+block stats `/workspace/tmp/ish-arm64-node-bun-perf-20260516-044756.md` and default `/workspace/tmp/ish-arm64-node-bun-perf-20260516-044839.md`, both **10 / 10 passing**. `ISH_ARM64_BLOCK_STATS=1` is silent by default unless enabled and now reports slot, same-page chain-patch, and eager-prechain splits; the refined stats run showed about 6.1M chain attempts, 5.3M patches, an 87.7% patch rate, and about 76.0% same-page patched chains. `ISH_ARM64_EAGER_PRECHAIN=1` is a separate default-off Phase 3A experiment that prechains only same-page whole-block starts; promoted outgoing-only validation passed eager+stats Node/Bun at `/workspace/tmp/ish-arm64-node-bun-perf-20260516-071228.md`, default Node/Bun at `/workspace/tmp/ish-arm64-node-bun-perf-20260516-071258.md`, and eager Alpine runtime coverage **82 / 82** at `/workspace/tmp/ish-arm64-runtime-coverage-20260516-071511.md`. `ISH_ARM64_EAGER_PRECHAIN_INCOMING=1` is nested under eager prechain as a measurement/debug flag only. For iOS/App Store-facing wording, describe this path as a precompiled gadget executor/threaded interpreter dispatch cache rather than a JIT: it rewrites data slots to existing bundled code and does not generate executable memory, require RWX pages, or require `MAP_JIT`.
-
-```bash
-make test-arm64-node-bun-perf ROOTFS_LANES=alpine=$(pwd)/alpine-arm64-fakefs REPORT_DIR=/workspace/tmp TIMEOUT_S=180
-```
-
-Run the CLI corner-case smoke suite for optional shells, TUI tools, network diagnostics, Docker CLI behavior, and HTTPS `git` clone coverage:
-
-```bash
-make test-arm64-cli-corner-smoke ROOTFS_LANES=alpine=$(pwd)/alpine-arm64-fakefs REPORT_DIR=/workspace/tmp TIMEOUT_S=240 INSTALL_TIMEOUT_S=1200
-```
-
-Latest CLI corner result: **27 passing, 2 unsupported, 0 failed** at `/workspace/tmp/ish-arm64-cli-corner-smoke-20260516-223418.md`. This includes `htop` and `btop` launched inside `tmux`, Docker CLI version and `dockerd --version` as passing rows, bounded Docker daemon startup as `UNSUPPORTED`, Docker `hello-world` as `UNSUPPORTED` when no daemon is available, direct `curl https://github.com`, direct HTTPS `git ls-remote`, and a real `rcarmo/go-gte` HTTPS clone without an `/etc/hosts` workaround after the UDP `recvfrom()` sockaddr-length compatibility fix.
-
-Run the separate AI CLI coverage suite:
-
-```bash
-make test-arm64-ai-cli-npm-runtime-coverage ROOTFS_LANES=alpine=$(pwd)/alpine-arm64-fakefs REPORT_DIR=/workspace/tmp TIMEOUT_S=180 INSTALL_TIMEOUT_S=1800
-```
-
-Useful overrides:
-
-```bash
-ISH_BIN=/path/to/ish \
-ROOTFS=/path/to/alpine-arm64-fakefs \
-REPORT_DIR=/workspace/tmp \
-TIMEOUT_S=180 \
-INSTALL_TIMEOUT_S=1200 \
-./tests/arm64/runtime-coverage.sh
-```
-
-A passing core run writes `ish-arm64-runtime-coverage-YYYYMMDD-HHMMSS.md` under `REPORT_DIR`. The suite is intentionally strict: a test is not considered passing if it has to be force-killed or if `SAFETY-VALVE` diagnostics appear in captured output. The AI CLI suite writes `ish-arm64-ai-cli-runtime-coverage-YYYYMMDD-HHMMSS.md` and is stricter about runtime diagnostics (`SAFETY-VALVE`, futex noise, V8/Bun crashes, page faults, and illegal-instruction traces all fail the row even when a package manager exits zero).
-
-## Runtime coverage gate
-
-`tests/arm64/runtime-coverage.sh` is the main fast regression gate for ARM64 backend/runtime work. It boots the Alpine ARM64 fakefs under the Linux-host iSH binary, installs missing guest packages as needed, pushes generated fixtures into `/tmp/runtime-coverage`, runs each test with a bounded timeout, and writes a Markdown result table.
-
-### Coverage groups
-
-| Stage | Tests | What it protects |
+| Gate | Command | Expected output |
 |---|---|---|
-| `base` | shell execution, `apk`, tmp file I/O, symlink retarget normalization | Guest startup, package-manager basics, fakefs path behavior, and the removed stale path-normalization cache. |
-| `c` | GCC version, compile/run, SysV shared memory/message queues, high-value syscall gaps, ARM64 ISA/runtime fixtures | Native compilation, process/IPC behavior, socket ABI, modern syscall probes, signal ABI, barriers, self-modifying code, and ARM64 instruction correctness. |
-| `go` | `go version`, `go env`, `go tool compile`, `go run`, `go build`, `go test` | Go toolchain startup/codegen, module/test flow, signal-stack behavior, futex/thread scheduling, and larger mmap/runtime assumptions. |
-| `bun` | `bun --version`, local `file:` dependency install, TypeScript run, `bun test`, `bun build` | JavaScriptCore allocation, high-address mmap reservations, timers, package install filesystem behavior, and JSC GC compatibility shims. |
-| `node` | `node --version`, `node -e`, `npm --version`, `npm run` | V8/Node startup, npm process/filesystem paths, mmap reservation behavior, and quiet vector-I/O syscall coverage. |
-| `python` / `lua` | version and eval smoke | Interpreted runtime startup, stdio, basic arithmetic/eval, and package availability assumptions. Lua is part of the original staged runtime matrix and remains covered by both version and eval rows. |
-| `java` / `clojure` | `javac` + default mixed-mode `java`, `java -Xint`, `clojure.main` eval | OpenJDK startup, mixed-mode compiler/JIT smoke, interpreter fallback, signal/ucontext compatibility, and Clojure-on-JVM startup. |
-| `pypy` / `swift` | Alpine aarch64 availability probes | Keeps unsupported toolchains explicit instead of silently skipping them. |
-| `csharpaot` | `csharpaot` build/run when installed; opt-in `dotnet publish -p:PublishAot=true` fallback with `ISH_ARM64_DOTNET_AOT_PUBLISH=1`; otherwise installed-SDK/package-availability probe | Tracks .NET NativeAOT availability while keeping the expensive SDK publish path out of the default fast gate. |
-| `rust` | `rustc --version`, direct compile/run, optimized std runtime, `rustc --test`, Cargo build/run/test | Rust toolchain startup/codegen plus std coverage for threads, atomics, channels, file I/O, TCP loopback, and child processes. |
-| `erlang` | `erl -version` | BEAM startup and helper-thread cleanup without exit safety-valve leaks. |
-| `zig` | `zig version`, `zig build-obj`, C harness link/run | Zig frontend/object generation plus ARM64 object execution through a linked native harness. |
+| Build | `make build-arm64-linux-all` | Linux ARM64 release/debug variants build. |
+| Core runtime | `make test-arm64-runtime-coverage REPORT_DIR=/workspace/tmp TIMEOUT_S=180 INSTALL_TIMEOUT_S=1200` | Markdown report; current baseline **83 / 83**. |
+| CLI corner cases | `make test-arm64-cli-corner-smoke ROOTFS_LANES=alpine=$(pwd)/alpine-arm64-fakefs REPORT_DIR=/workspace/tmp TIMEOUT_S=240 INSTALL_TIMEOUT_S=1200` | Current baseline **27 pass / 2 unsupported / 0 fail**. |
+| AI/agent CLI lane | `make test-arm64-ai-cli-npm-runtime-coverage ROOTFS_LANES=alpine=$(pwd)/alpine-arm64-fakefs REPORT_DIR=/workspace/tmp TIMEOUT_S=180 INSTALL_TIMEOUT_S=1800` | Current baseline **16 / 16**. |
+| Node/Bun timing | `make test-arm64-node-bun-perf ROOTFS_LANES=alpine=$(pwd)/alpine-arm64-fakefs REPORT_DIR=/workspace/tmp TIMEOUT_S=180` | Timing/status table for executor changes. |
 
-### C/syscall and ARM64 fixture details
+## Core coverage
 
-The C stage is the broadest low-level coverage lane:
+| Stage | Covers | Regression class |
+|---|---|---|
+| `base` | Shell, `apk`, temporary files, symlink retargeting | Guest boot, package-manager basics, fakefs path behavior. |
+| `c` | GCC compile/run, SysV IPC, syscall probes, sockets, ARM64 fixtures | Syscall ABI, signal ABI, instruction correctness, self-modifying-code invalidation. |
+| `go` | `go version/env/tool compile/run/build/test` | Threads, futexes, signal stacks, large mappings, toolchain startup. |
+| `bun` | Bun version, local install, TypeScript, tests, build | JavaScriptCore allocation, high mappings, timers, package filesystem behavior. |
+| `node` | Node/npm version/eval/run | V8 startup, npm filesystem/process paths, mmap reservations. |
+| `python` / `lua` | Version and eval rows | Interpreter startup and stdio. |
+| `java` / `clojure` | `javac`, mixed-mode `java`, `java -Xint`, Clojure eval | JVM startup, ucontext/signal compatibility, interpreter fallback. |
+| `rust` | `rustc`, optimized std, unit tests, Cargo build/run/test | Threads, atomics, channels, TCP loopback, child processes. |
+| `erlang` / `zig` | BEAM version; Zig version/object/link/run | Runtime startup and generated object execution. |
+| Availability rows | PyPy, Swift, C# NativeAOT SDK | Unsupported or opt-in toolchains remain explicit. |
 
-- **SysV IPC:** `shmget`/`shmat`/`shmdt`/`shmctl`, `msgget`/`msgsnd`/`msgrcv`/`msgctl` across `fork()`.
-- **High-value syscall gaps:** `signalfd4`, scheduler priority calls (`sched_setscheduler`/`sched_setparam`/`sched_getparam`/`sched_getscheduler`), SysV semaphores, POSIX message queues, `memfd_create`, `openat2`, `faccessat2`, `fchmodat2(AT_EMPTY_PATH)`, `preadv2`, `pwritev2`, `process_vm_readv`, and `process_vm_writev`.
-- **Socket ABI:** UDP `sendto`/`recvfrom`, TCP `listen`/`accept`, `getsockname`, `setsockopt`, `getsockopt`, socketpair `sendmsg`/`recvmsg`, and ARM64 `SCM_RIGHTS` fd passing with guest `cmsghdr` layout validation. UDP `recvfrom()` now accepts oversized source-address buffers, matching Linux behavior required by c-ares/libcurl DNS.
-- **ARM64 sysreg/instruction fixtures:** `DCZID_EL0`/`dc zva`, signal `ucontext_t`, per-thread `sigaltstack`, CCMP/CCMN condition-code-15 (`NV`), DMB/DSB/ISB barriers, and self-modifying-code invalidation.
+## Low-level fixtures
 
-### Rust fixture details
+| Area | Rows |
+|---|---|
+| IPC | SysV shared memory, SysV message queues, semaphores, POSIX message queues. |
+| Modern syscalls | `signalfd4`, scheduler priority calls, `memfd_create`, `openat2`, `faccessat2`, `fchmodat2(AT_EMPTY_PATH)`, `preadv2`, `pwritev2`, `process_vm_readv`, `process_vm_writev`. |
+| Sockets | UDP/TCP, socket options, `sendmsg`/`recvmsg`, ARM64 `SCM_RIGHTS`, oversized UDP `recvfrom()` source buffers. |
+| ARM64 | `DCZID_EL0`/`dc zva`, signal `ucontext_t`, per-thread `sigaltstack`, CCMP/CCMN `NV`, DMB/DSB/ISB, self-modifying code. |
 
-The Rust lane is now intentionally more than a `rustc hello.rs` smoke:
+## Optional/diagnostic lanes
 
-- standalone `rustc` compile/run with std collections
-- optimized `rustc -O` std runtime program
-- `rustc --test` unit tests
-- Cargo build/run/test for a generated crate
-- threads, atomics, mutexes, channels, file roundtrips, TCP loopback, and child process spawning
+| Lane | Purpose | Current status |
+|---|---|---|
+| CLI corner cases | TUI tools, DNS/HTTPS, GitHub clone, Docker CLI/daemon diagnostics, `strace`, `lsof`, netlink visibility. | **27 pass / 2 unsupported / 0 fail**. Docker daemon/container rows are unsupported without container kernel primitives. |
+| AI/agent CLI | Unauthenticated install/startup/help/version probes for agent CLIs. | **16 / 16** in Alpine npm lane. Debian/glibc lane remains blocked by thread/libuv assertions. |
+| Node/Bun perf | Timing table for executor changes and optional block/prechain statistics. | Use before/after dispatch optimization work. |
+| NativeAOT publish | Full `dotnet publish -p:PublishAot=true`. | Opt-in only via `ISH_ARM64_DOTNET_AOT_PUBLISH=1`; current focused probes stall in Roslyn `csc` after restore. |
 
-This makes Rust a useful proxy for pthread/futex behavior, socket blocking semantics, process spawning, file metadata, and toolchain codegen.
+## Failure rules
 
-## Current coverage status
+A row is not a pass when any of these happen:
 
-| Area | Status | Notes |
-|---|---:|---|
-| Base shell / apk / tmp I/O | Passing | Basic guest execution and filesystem operations are stable. |
-| Path normalization | Passing | Rapid symlink retargeting resolves the new target; stale path-normalization caching was removed. |
-| C toolchain | Passing | `gcc` can compile and execute generated fixtures. |
-| SysV IPC / socket ABI | Passing | Shared memory/message queues work across `fork()`; staged coverage validates UDP/TCP socket options, `sendmsg`/`recvmsg`, and `SCM_RIGHTS` fd passing. |
-| High-value syscall gaps | Passing | Modern runtime probes and IPC/syscall paths are implemented or have quiet fallback behavior where appropriate. |
-| ARM64 DC ZVA | Passing | `DCZID_EL0` reports a 64-byte block and `dc zva` zeros the expected aligned block. |
-| ARM64 signal ucontext | Passing | Guest SIGSEGV handlers see Linux/musl-compatible `ucontext_t`; null read faults are delivered to handlers. |
-| Per-thread `sigaltstack` | Passing | Alternate signal stacks are per-task, matching Linux behavior needed by Go and other runtimes. |
-| ARM64 CCMP/CCMN NV | Passing | Condition code 15 (`NV`) follows AArch64 hardware behavior for conditional compare instructions. |
-| ARM64 barriers | Passing | `DMB`, `DSB`, and `ISB` decode to distinct synchronization gadgets with conservative folded domains. |
-| ARM64 self-modifying code | Passing | Writes to translated code pages invalidate stale blocks before patched code is executed. |
-| Go | Passing | `go tool compile`, `go run`, `go build`, `go test`, and Benchmarks Game Go 10/10 pass. |
-| Bun | Passing | Local dependency install, TypeScript run, `bun test`, and `bun build` pass with current JSC compatibility shims. |
-| Node/npm | Passing | `node -e`, `npm --version`, and `npm run` pass without the earlier noisy fallback stubs. |
-| Python / Lua / Clojure | Passing | Version/eval smoke passes in the staged harness. |
-| Java/OpenJDK | Passing | OpenJDK 21 default mixed-mode `javac`/`java`, `-Xint`, and Java-equivalent Benchmarks Game probe pass. |
-| PyPy / Swift | Accounted for | Alpine 3.23 aarch64 currently has no packaged PyPy or Swift toolchain in the index. |
-| C# NativeAOT / `csharpaot` | Accounted for / publish pending | The fakefs now has `dotnet9-sdk-aot` and `dotnet10-sdk-aot`; the default row reports `dotnet-aot-sdk-installed-publish-opt-in`. Full NativeAOT publish/run is deliberately gated behind `ISH_ARM64_DOTNET_AOT_PUBLISH=1` because it is much heavier than the core runtime smoke. Focused no-server publish probes get through restore but currently stall in the Roslyn `csc` phase, so NativeAOT execution is not yet promoted to the default gate. |
-| Rust | Passing | Direct `rustc`, optimized std runtime, `rustc --test`, and Cargo build/run/test pass without safety-valve or NETDIAG noise. |
-| Erlang | Passing | BEAM starts cleanly for `erl -version`; fuller module execution remains a follow-up lane. |
-| Zig | Passing | `zig version`, `zig build-obj`, and linked object execution through a C harness pass; `zig test` is excluded pending Alpine Zig compiler-rt `f16` behavior. |
+1. The harness kills it for timeout.
+2. `SAFETY-VALVE` appears in a clean runtime log.
+3. Unexpected `NETDIAG`, page-fault, illegal-instruction, V8/Bun crash, or futex-noise diagnostics appear in a row that is not explicitly diagnostic.
+4. A row is silently skipped instead of reported as passing, failing, or unsupported.
 
-## Workload smoke tests beyond the staged gate
-
-The staged gate is complemented by heavier workload probes documented under `docs/`:
-
-- [ARM64_WORKLOAD_SMOKE_TESTS.md](ARM64_WORKLOAD_SMOKE_TESTS.md) — overview and rationale for non-trivial workloads.
-- [ARM64_SMOKE_ISSUES_AND_SYSCALL_COVERAGE.md](ARM64_SMOKE_ISSUES_AND_SYSCALL_COVERAGE.md) — issue disposition and syscall coverage appraisal.
-- [GO_GTE_PROGRESS.md](GO_GTE_PROGRESS.md) — `rcarmo/go-gte` numerical/model-conversion workload.
-- [BENCHMARKSGAME_MATRIX.md](BENCHMARKSGAME_MATRIX.md) plus per-language `BENCHMARKSGAME_*_SMOKE.md` reports — Benchmarks Game rows.
-- [ARM64_PRODUCTION_BASELINE.md](ARM64_PRODUCTION_BASELINE.md) — current known-good package/rootfs/code baseline.
-
-Current workload highlights:
-
-- Benchmarks Game GCC, G++, Go, Python, Node.js, PHP, Perl, Ruby, and Lua rows pass **10/10** each.
-- Java-equivalent Benchmarks Game probe passes **10/10** in default mixed mode and interpreter fallback mode.
-- `rcarmo/go-gte` can build, convert `gte-small.gtemodel`, complete `go test -count=1 ./...`, and run `make run-go`.
-- Bun/PiClaw install/start far enough to serve the web UI and no longer hit the recursive `copyfile`/`ENOTSUP` bootstrap issue.
-
-## Major runtime fixes covered by the tests
-
-The runtime gate and workload smokes cover the fixes that made the ARM64 guest practical:
-
-- precise ARM64 JIT memory-fault retry for Bun/JSC allocator correctness
-- JSC compatibility shims: `JSC_numberOfGCMarkers=1`, `JSC_useConcurrentGC=0`
-- ARM64 signal ABI fixes (`siginfo_t`, `SI_TKILL`, correct syscall 240 handling)
-- `getdents64` directory-entry type reporting
-- ARM64 `preadv`/`pwritev` and `fchmodat2(AT_EMPTY_PATH)` syscall wiring
-- high 48-bit mmap hints and high anonymous `MAP_NORESERVE` arenas, including reservation-safe high-hole alignment
-- lazy `MAP_NORESERVE` permission updates on `mprotect()`
-- LDXP/STLXP, CASP, CLREX, LDXR width, LDPSW, FP16 conversion, barrier, and self-modifying-code fixes
-- bounded logging/launch/shebang/`PT_INTERP` handling
-- bounded path/symlink expansion and removal of stale path-normalization caching
-- guest-signal-aware blocking realfs/socket I/O and longer `exit_group` drain behavior
-- socket address, option, receive, `sendmsg`/`recvmsg`, and ARM64 `SCM_RIGHTS` control-message hardening
-
-## Build and platform notes
-
-The Linux-host build flow is captured in the top-level `Makefile`:
-
-- `make build-arm64-linux`
-- `make build-arm64-linux-debug`
-- `make build-arm64-linux-all`
-- `make test-arm64-runtime-coverage`
-- `make test-arm64-runtime-coverage-debug`
-
-Host OS differences are being moved behind `platform/platform.h` with one implementation per host under `platform/`:
-
-- `platform/linux.c`
-- `platform/darwin.c`
-
-The split currently centralizes fd-path lookup, stat timestamp fields, host random bytes, thread naming, host `sysinfo`, per-thread CPU usage, and memory-pressure hooks. Remaining host-specific socket/poll/native-offload branches are documented in [LINUX_BUILD_AND_HOST_ABI.md](LINUX_BUILD_AND_HOST_ABI.md).
-
-A Linux SDL/VNC terminal harness is available for interactive guest debugging:
-
-- `tools/ish_sdl_vnc.c`
-- `tools/run-sdl-vnc.sh`
-
-## Interpreting failures
-
-When the staged runtime gate fails:
-
-1. Open the generated Markdown report under `REPORT_DIR`.
-2. Check the failing stage/test row and captured detail.
-3. Treat `SAFETY-VALVE` output as a real failure, not a pass.
-4. Treat unexpected `NETDIAG` in clean smoke logs as a regression signal unless the test is explicitly diagnostic.
-5. Prefer adding a focused fixture to `tests/arm64/runtime-coverage.sh` when a runtime bug is fixed, so the regression remains covered.
-
-## Immediate next cleanup candidates
-
-- Run longer Bun/npm workloads to find the next post-coverage failure.
-- Finish optional crypto/LSE helper validation before re-advertising those HWCAP bits.
-- Revisit JSC parallel/concurrent GC suspension if the compatibility shims need to be removed.
-- Continue moving host-specific socket/poll/native-offload branches behind platform helpers when a second call site or correctness issue justifies it.
+When fixing a runtime bug, add or update a focused row in the relevant harness so the failure stays covered.
