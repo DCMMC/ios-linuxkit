@@ -1123,6 +1123,90 @@ tbnz_nt_unchained:
     b fiber_ret_chain
 
 /*
+ * TBZ/TBNZ with external taken edge and internal fallthrough edge.
+ * Code stream: [gadget addr][rt | bit<<8 | is_tbnz<<14]
+ *              [fake_target][internal_continue_ptr]
+ *
+ * The taken edge uses the normal external fake-IP/block->code chain path.
+ * The not-taken edge jumps to a private internal-continue record and never
+ * passes the interior pointer to fiber_ret_chain.
+ */
+.gadget tbz_fallthrough_internal
+    ldr x8, [_pc], #8       // rt | bit<<8 | is_tbnz<<14
+    ldr x9, [_pc], #8       // taken target (fake_ip or chained)
+    ldr x10, [_pc]          // internal_continue record pointer
+
+    and x11, x8, #0x1f      // rt
+    ubfx x12, x8, #8, #6    // bit position (0-63)
+    ubfx x13, x8, #14, #1   // is_tbnz
+    add x14, _cpu, #CPU_x0
+    cmp x11, #31
+    b.eq tbz_fi_xzr
+    ldr x15, [x14, x11, lsl #3]
+    b tbz_fi_test
+tbz_fi_xzr:
+    mov x15, #0
+tbz_fi_test:
+    mov x16, #1
+    lsl x16, x16, x12
+    tst x15, x16
+    cset w17, ne            // bit set = 1, bit clear = 0
+    cmp w17, w13            // TBNZ takes when set; TBZ takes when clear
+    b.eq tbz_fi_taken
+tbz_fi_not_taken:
+    mov _pc, x10
+    gret
+tbz_fi_taken:
+    inline_chain x9, tbz_fi_taken_unchained
+tbz_fi_taken_unchained:
+    and x11, x9, #0xffffffffffff
+    str x11, [_cpu, #CPU_pc]
+    mov _pc, x9
+    b fiber_ret_chain
+
+/*
+ * TBZ/TBNZ with internal taken edge and external fallthrough edge.
+ * Code stream: [gadget addr][rt | bit<<8 | is_tbnz<<14]
+ *              [internal_continue_ptr][fake_fallthrough]
+ *
+ * The taken edge jumps to a private internal-continue record and never passes
+ * the interior pointer to fiber_ret_chain. The not-taken edge uses the normal
+ * external fake-IP/block->code chain path.
+ */
+.gadget tbz_taken_internal
+    ldr x8, [_pc], #8       // rt | bit<<8 | is_tbnz<<14
+    ldr x9, [_pc], #8       // internal_continue record pointer
+    ldr x10, [_pc]          // fallthrough target (fake_ip or chained)
+
+    and x11, x8, #0x1f      // rt
+    ubfx x12, x8, #8, #6    // bit position (0-63)
+    ubfx x13, x8, #14, #1   // is_tbnz
+    add x14, _cpu, #CPU_x0
+    cmp x11, #31
+    b.eq tbz_ti_xzr
+    ldr x15, [x14, x11, lsl #3]
+    b tbz_ti_test
+tbz_ti_xzr:
+    mov x15, #0
+tbz_ti_test:
+    mov x16, #1
+    lsl x16, x16, x12
+    tst x15, x16
+    cset w17, ne            // bit set = 1, bit clear = 0
+    cmp w17, w13            // TBNZ takes when set; TBZ takes when clear
+    b.eq tbz_ti_taken
+tbz_ti_not_taken:
+    inline_chain x10, tbz_ti_not_taken_unchained
+tbz_ti_not_taken_unchained:
+    and x11, x10, #0xffffffffffff
+    str x11, [_cpu, #CPU_pc]
+    mov _pc, x10
+    b fiber_ret_chain
+tbz_ti_taken:
+    mov _pc, x9
+    gret
+
+/*
  * CSINC - Conditional Select Increment
  * Code stream: [gadget addr][rd | rn<<8 | rm<<16 | cond<<24 | sf<<28]
  *
