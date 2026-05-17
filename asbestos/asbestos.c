@@ -104,6 +104,12 @@ static uint64_t arm64_block_stats_hot_block_samples;
 static uint64_t arm64_block_stats_hot_block_evictions;
 static uint64_t arm64_block_stats_hot_edge_samples;
 static uint64_t arm64_block_stats_hot_edge_evictions;
+static _Atomic uint64_t arm64_block_stats_trace_edge_same_page;
+static _Atomic uint64_t arm64_block_stats_trace_edge_forward_same_page;
+static _Atomic uint64_t arm64_block_stats_trace_edge_backward_same_page;
+static _Atomic uint64_t arm64_block_stats_trace_edge_self_loop;
+static _Atomic uint64_t arm64_block_stats_trace_edge_cross_page;
+static _Atomic uint64_t arm64_block_stats_trace_edge_unknown_slot;
 static struct arm64_block_stats_hot_block arm64_block_stats_hot_blocks[ARM64_BLOCK_STATS_HOT_BLOCKS];
 static struct arm64_block_stats_hot_edge arm64_block_stats_hot_edges[ARM64_BLOCK_STATS_HOT_EDGES];
 
@@ -257,11 +263,17 @@ void arm64_block_stats_dump_if_enabled(void) {
     }
 
     fprintf(stderr,
-            "ARM64_BLOCK_HOT_STATS block_samples=%llu block_evictions=%llu edge_samples=%llu edge_evictions=%llu",
+            "ARM64_BLOCK_HOT_STATS block_samples=%llu block_evictions=%llu edge_samples=%llu edge_evictions=%llu trace_edge_same_page=%llu trace_edge_forward_same_page=%llu trace_edge_backward_same_page=%llu trace_edge_self_loop=%llu trace_edge_cross_page=%llu trace_edge_unknown_slot=%llu",
             (unsigned long long)hot_block_samples,
             (unsigned long long)hot_block_evictions,
             (unsigned long long)hot_edge_samples,
-            (unsigned long long)hot_edge_evictions);
+            (unsigned long long)hot_edge_evictions,
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_trace_edge_same_page, memory_order_relaxed),
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_trace_edge_forward_same_page, memory_order_relaxed),
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_trace_edge_backward_same_page, memory_order_relaxed),
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_trace_edge_self_loop, memory_order_relaxed),
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_trace_edge_cross_page, memory_order_relaxed),
+            (unsigned long long)atomic_load_explicit(&arm64_block_stats_trace_edge_unknown_slot, memory_order_relaxed));
     for (int i = 0; i < ARM64_BLOCK_STATS_HOT_BLOCKS; i++) {
         fprintf(stderr, " hot_block%d_pc=0x%llx hot_block%d_count=%llu",
                 i, (unsigned long long)hot_blocks[i].pc,
@@ -319,8 +331,23 @@ void arm64_block_stats_count_chained_entry(struct fiber_block *from, unsigned lo
             matched_slot = true;
         }
     }
-    if (!matched_slot)
+    if (!matched_slot) {
         atomic_fetch_add_explicit(&arm64_block_stats_chain_entry_unknown_slot, 1, memory_order_relaxed);
+        atomic_fetch_add_explicit(&arm64_block_stats_trace_edge_unknown_slot, 1, memory_order_relaxed);
+    }
+
+    if (from->addr == to->addr) {
+        atomic_fetch_add_explicit(&arm64_block_stats_trace_edge_same_page, 1, memory_order_relaxed);
+        atomic_fetch_add_explicit(&arm64_block_stats_trace_edge_self_loop, 1, memory_order_relaxed);
+    } else if (PAGE(from->addr) == PAGE(to->addr)) {
+        atomic_fetch_add_explicit(&arm64_block_stats_trace_edge_same_page, 1, memory_order_relaxed);
+        if (to->addr > from->addr)
+            atomic_fetch_add_explicit(&arm64_block_stats_trace_edge_forward_same_page, 1, memory_order_relaxed);
+        else
+            atomic_fetch_add_explicit(&arm64_block_stats_trace_edge_backward_same_page, 1, memory_order_relaxed);
+    } else {
+        atomic_fetch_add_explicit(&arm64_block_stats_trace_edge_cross_page, 1, memory_order_relaxed);
+    }
 
     arm64_block_stats_hot_lock_acquire();
     arm64_block_stats_record_hot_block_locked(to->addr);

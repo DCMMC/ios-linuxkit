@@ -447,6 +447,14 @@ Phase 4 hot-candidate reconnaissance tranche:
 - Node/Bun validation: default `/workspace/tmp/ish-arm64-node-bun-perf-20260517-073802.md` and block-stats `/workspace/tmp/ish-arm64-node-bun-perf-20260517-073848.md` were both **10 / 10 passing**. Aggregated hot-candidate stats from the block-stats run: `block_samples=25674755`, `edge_samples=12503165`, `chain_entries=12503165`, `chain_entry_unknown_slot=0`; the hottest row-local block candidate observed was `hot_block0_pc=0xedfba7a8` with count `2216394`, and the hottest row-local edge candidate was `0xedfb379c -> 0xedfb37a8` on slot `1` with count `1752072`.
 - Runtime validation: default full Alpine runtime coverage `/workspace/tmp/ish-arm64-runtime-coverage-20260517-074001.md` was **83 / 83 passing**.
 
+Phase 4 dry-run trace-candidate classification tranche:
+
+- Extended `ARM64_BLOCK_HOT_STATS` with aggregate chained-edge shape counters: `trace_edge_same_page`, `trace_edge_forward_same_page`, `trace_edge_backward_same_page`, `trace_edge_self_loop`, `trace_edge_cross_page`, and `trace_edge_unknown_slot`. These classify observed chained edges for future trace-builder eligibility without building traces or changing execution semantics.
+- Scope remains stats-only and default-off: no trace builder, no guarded exits, no invalidation epoch changes, and no generated-code behavior changes.
+- Focused smoke: default `/workspace/tmp/arm64-traceclass-default-20260517-075602.log` stayed silent; stats-enabled `/workspace/tmp/arm64-traceclass-enabled-20260517-075602.log` emitted the new classification fields with non-zero same-page, forward, backward, self-loop, and cross-page values.
+- Node/Bun validation: default `/workspace/tmp/ish-arm64-node-bun-perf-20260517-075634.md` and block-stats `/workspace/tmp/ish-arm64-node-bun-perf-20260517-075720.md` were both **10 / 10 passing**. Aggregated classification from the stats run: `edge_samples=12497734`, `trace_edge_same_page=12455860`, `trace_edge_forward_same_page=9560299` (**76.50%**), `trace_edge_self_loop=2183638` (**17.47%**), `trace_edge_backward_same_page=711923` (**5.70%**), `trace_edge_cross_page=41874` (**0.34%**), and `trace_edge_unknown_slot=0`. This supports a future same-page forward-edge-only first trace prototype and suggests self-loops/backward edges should remain excluded until loop-specific guard behavior is designed.
+- Runtime validation: default full Alpine runtime coverage `/workspace/tmp/ish-arm64-runtime-coverage-20260517-075835.md` was **83 / 83 passing**.
+
 ## Validation gates
 
 For each implementation tranche:
