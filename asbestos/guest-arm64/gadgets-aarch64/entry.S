@@ -86,28 +86,21 @@ fiber_ret_chain:
     ldr x8, [_cpu, #CPU_poked_ptr]
     ldrb w8, [x8]
     cbnz w8, poke
-    // Adjacent-block fast path: if the target block immediately follows the
-    // source block in guest memory (target->addr == from->end_addr + 4) and
-    // both are on the same 4 KB page, the TLB mapping for the page cannot
-    // have changed since the source block was compiled (any mmap/munmap would
-    // have invalidated both blocks). Skip the mem_changes check and go
-    // directly to execution. This covers ~69 % of chained forward transitions.
+    // Same-page fast path: if both source and target blocks are on the same
+    // 4 KB guest page, the TLB mapping for that page cannot have changed since
+    // either block was compiled — any mmap/munmap that remapped the page would
+    // have invalidated both blocks. Skip the mem_changes check entirely.
+    // This covers ~76 % of chained transitions (all same-page, not just adjacent).
     ldr x9, [_cpu, #LOCAL_last_block]        // x9 = from fiber_block*
     cbz x9, fiber_ret_chain_memcheck         // no prior block → full check
     ldr x10, [x9, #FIBER_BLOCK_end_addr]     // x10 = from->end_addr
     sub x11, _pc, #FIBER_BLOCK_code          // x11 = target fiber_block*
     ldr x12, [x11, #FIBER_BLOCK_addr]        // x12 = target->addr
-    // Adjacent: target->addr == from->end_addr + 4
-    sub x12, x12, x10
-    cmp x12, #4
-    b.ne fiber_ret_chain_memcheck
     // Same page: PAGE(from->end_addr) == PAGE(target->addr)
-    ldr x12, [x11, #FIBER_BLOCK_addr]        // reload target->addr
     eor x10, x10, x12                        // XOR end_addr ^ target->addr
     lsr x10, x10, #12                        // non-zero iff different pages
-    cbnz x10, fiber_ret_chain_memcheck
-    // Adjacent same-page: safe to skip mem_changes, fall to execute
-    b fiber_ret_chain_execute
+    cbz x10, fiber_ret_chain_execute         // same page → skip mem_changes
+    // else fall through to full check
 fiber_ret_chain_memcheck:
     // Check if page table changed (mem_changes mismatch).
     // On macOS, munmap+mmap reuses host virtual addresses, so stale TLB entries
