@@ -85,8 +85,7 @@ window.addEventListener('unhandledrejection', (event) => {
 
 window.addEventListener('load', async () => {
     try {
-        if (document.fonts?.ready)
-            await document.fonts.ready;
+        await loadConfiguredFont(styleState);
 
         await init();
 
@@ -217,7 +216,7 @@ function preferredDevicePixelRatio() {
     // Canvas2D was kept for iPad rendering stability. On 3x iPhones, a full
     // DPR canvas is expensive and was the likely source of whole-app slowness.
     if (/\biPhone\b/.test(navigator.userAgent || '') || navigator.platform === 'iPhone')
-        return Math.min(window.devicePixelRatio || 1, 2);
+        return 1;
     return window.devicePixelRatio || 1;
 }
 

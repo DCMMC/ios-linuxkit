@@ -35,8 +35,6 @@ typedef struct linux_tty *tty_t;
 @property (nonatomic) BOOL outputInProgress;
 
 @property DelayedUITask *refreshTask;
-@property DelayedUITask *scrollToBottomTask;
-
 @property BOOL applicationCursor;
 @property (nonatomic) NSUInteger windowSizeRequestID;
 @property (nonatomic) int lastWindowCols;
@@ -83,7 +81,6 @@ static NSMapTable<NSUUID *, Terminal *> *terminalsByUUID;
         if (self = [super init]) {
             self.pendingData = [[NSMutableData alloc] initWithCapacity:BUF_SIZE];
             self.refreshTask = [[DelayedUITask alloc] initWithTarget:self action:@selector(refresh)];
-            self.scrollToBottomTask = [[DelayedUITask alloc] initWithTarget:self action:@selector(scrollToBottom)];
 #if !ISH_LINUX
             lock_init(&_dataLock);
             cond_init(&_dataConsumed);
@@ -100,7 +97,7 @@ static NSMapTable<NSUUID *, Terminal *> *terminalsByUUID;
 - (WKWebView *)webView {
     if (_webView == nil) {
         WKWebViewConfiguration *config = [WKWebViewConfiguration new];
-        NSString *bootstrapStyleJSON = self.bootstrapStyleJSON ?: @"{}";
+        NSString *bootstrapStyleJSON = [self bootstrapStyleJSONForNewWebView];
         NSString *bootstrapStyleScript = [NSString stringWithFormat:
             @"(() => {"
              "const style = %@;"
@@ -136,6 +133,29 @@ static NSMapTable<NSUUID *, Terminal *> *terminalsByUUID;
         [_webView loadFileURL:xtermHtmlFile allowingReadAccessToURL:xtermHtmlFile.URLByDeletingLastPathComponent];
     }
     return _webView;
+}
+
+- (NSString *)bootstrapStyleJSONForNewWebView {
+    if (self.bootstrapStyleJSON.length > 0)
+        return self.bootstrapStyleJSON;
+
+    UserPreferences *prefs = UserPreferences.shared;
+    Palette *palette = prefs.palette;
+    NSMutableDictionary<NSString *, id> *themeInfo = [@{
+        @"fontFamily": prefs.fontFamily,
+        @"fontSize": prefs.fontSize,
+        @"foregroundColor": palette.foregroundColor,
+        @"backgroundColor": palette.backgroundColor,
+        @"cursorColor": palette.cursorColor ?: palette.foregroundColor,
+        @"blinkCursor": @(prefs.blinkCursor),
+        @"cursorShape": prefs.htermCursorShape,
+    } mutableCopy];
+    if (palette.colorPaletteOverrides)
+        themeInfo[@"colorPaletteOverrides"] = palette.colorPaletteOverrides;
+
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:themeInfo options:0 error:nil];
+    NSString *json = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+    return json ?: @"{}";
 }
 
 #if !ISH_LINUX
@@ -290,11 +310,6 @@ static NSMapTable<NSUUID *, Terminal *> *terminalsByUUID;
         }
     });
 #endif
-    [self.scrollToBottomTask schedule];
-}
-
-- (void)scrollToBottom {
-    [self.webView evaluateJavaScript:@"exports.scrollToBottom()" completionHandler:nil];
 }
 
 - (NSString *)arrow:(char)direction {
