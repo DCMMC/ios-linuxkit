@@ -26,11 +26,13 @@ let styleState = {
     backgroundColor: '#000000',
     cursorColor: undefined,
     fontFamily: '"JetBrainsMono Nerd Font Mono", "FiraCode Nerd Font Mono", ui-monospace, "SFMono-Regular", Menlo, Monaco, monospace',
-    fontSize: 15,
+    fontSize: 12,
     colorPaletteOverrides: undefined,
     blinkCursor: false,
     cursorShape: 'BLOCK',
 };
+styleState = {...styleState, ...normalizeStyleUpdate(window.__terminalInitialStyle)};
+applyDocumentStyle(styleState);
 let resizeObserver;
 let pendingResizePreview = false;
 let pendingResizeCommitTimeout;
@@ -50,7 +52,8 @@ window.exports = {
     scrollToBottom() {},
     newScrollTop() {},
     updateStyle(nextStyle) {
-        styleState = {...styleState, ...nextStyle};
+        styleState = {...styleState, ...normalizeStyleUpdate(nextStyle)};
+        applyDocumentStyle(styleState);
     },
     getCharacterSize: () => [0, 0],
     clearScrollback() {},
@@ -82,23 +85,24 @@ window.addEventListener('unhandledrejection', (event) => {
 
 window.addEventListener('load', async () => {
     try {
-        if (document.fonts?.ready)
-            await document.fonts.ready;
+        await loadConfiguredFont(styleState);
 
         await init();
 
-        term = new Terminal({
+        const terminalOptions = {
             cols: 80,
             rows: 24,
             allowTransparency: true,
             cursorBlink: styleState.blinkCursor,
             cursorStyle: cursorStyleForGhostty(styleState.cursorShape),
+            devicePixelRatio: preferredDevicePixelRatio(),
             fontFamily: styleState.fontFamily,
             fontSize: styleState.fontSize,
             scrollbarWidth: 0,
             smoothScrollDuration: 0,
             theme: themeForGhostty(styleState),
-        });
+        };
+        term = new Terminal(terminalOptions);
         window.term = term;
 
         term.onData((data) => {
@@ -133,7 +137,8 @@ function installBridgeExports() {
     window.exports.write = (data) => {
         const bytes = latin1StringToBytes(data);
         term.write(bytes);
-        syncApplicationCursor();
+        if (bytes.includes(0x1b))
+            syncApplicationCursor();
         scheduleScrollSync();
     };
 
@@ -162,11 +167,14 @@ function installBridgeExports() {
     };
 
     window.exports.updateStyle = async (nextStyle) => {
-        styleState = {...styleState, ...nextStyle};
+        styleState = {...styleState, ...normalizeStyleUpdate(nextStyle)};
+        applyDocumentStyle(styleState);
         await loadConfiguredFont(styleState);
 
-        term.options.fontFamily = styleState.fontFamily;
-        term.options.fontSize = styleState.fontSize;
+        if (term.options.fontFamily !== styleState.fontFamily)
+            term.options.fontFamily = styleState.fontFamily;
+        if (term.options.fontSize !== styleState.fontSize)
+            term.options.fontSize = styleState.fontSize;
         term.options.cursorBlink = !!styleState.blinkCursor;
         term.options.cursorStyle = cursorStyleForGhostty(styleState.cursorShape);
         term.options.theme = themeForGhostty(styleState);
@@ -189,6 +197,28 @@ function installBridgeExports() {
 
     window.exports.setUserGesture = () => {};
     window.exports.setAccessibilityEnabled = () => {};
+}
+
+function normalizeStyleUpdate(nextStyle) {
+    const style = {...(nextStyle || {})};
+    if (!Array.isArray(style.colorPaletteOverrides))
+        style.colorPaletteOverrides = undefined;
+    return style;
+}
+
+function applyDocumentStyle(style) {
+    if (style.backgroundColor)
+        document.documentElement.style.setProperty('--terminal-background', style.backgroundColor);
+    if (style.foregroundColor)
+        document.documentElement.style.setProperty('--terminal-foreground', style.foregroundColor);
+}
+
+function preferredDevicePixelRatio() {
+    // Canvas2D was kept for iPad rendering stability. On 3x iPhones, a full
+    // DPR canvas is expensive and was the likely source of whole-app slowness.
+    if (/\biPhone\b/.test(navigator.userAgent || '') || navigator.platform === 'iPhone')
+        return 1;
+    return window.devicePixelRatio || 1;
 }
 
 function installFocusBridge() {

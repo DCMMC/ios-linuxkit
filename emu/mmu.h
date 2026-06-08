@@ -3,20 +3,11 @@
 
 #include "misc.h"
 
-// Page number type: bits of address above PAGE_BITS
-#ifdef GUEST_ARM64
-// ARM64: 48-bit address space → 36-bit page numbers
+// ARM64 page number type: 48-bit address space → 36-bit page numbers.
 typedef uint64_t page_t;
 typedef uint64_t pages_t;
 #define BAD_PAGE 0x1000000000ULL  // Invalid page marker (beyond 36-bit page range)
 #define MEM_PAGES BAD_PAGE        // Upper bound for iteration (not allocated as array)
-#else
-// x86: 32-bit address space → 20-bit page numbers
-typedef dword_t page_t;
-typedef dword_t pages_t;
-#define BAD_PAGE 0x100000       // Invalid page marker (beyond 20-bit page range)
-#define MEM_PAGES (1 << 20)     // 4GB address space (page numbers 0 to 0xFFFFF)
-#endif
 
 #ifndef __KERNEL__
 #define PAGE_BITS 12

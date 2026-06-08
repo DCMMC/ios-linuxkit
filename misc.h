@@ -83,18 +83,14 @@
 static inline void __use(int dummy __attribute__((unused)), ...) {}
 #define use(...) __use(0, ##__VA_ARGS__)
 
-#if defined(__x86_64__)
-#define rdtsc() ({ \
-        uint32_t low, high; \
-        __asm__ volatile("rdtsc" : "=a" (high), "=d" (low)); \
-        ((uint64_t) high) << 32 | low; \
-    })
-#elif defined(__arm64__) || defined(__aarch64__)
+#if defined(__arm64__) || defined(__aarch64__)
 #define rdtsc() ({ \
         uint64_t tsc; \
         __asm__ volatile("mrs %0, PMCCNTR_EL0" : "=r" (tsc)); \
         tsc; \
     })
+#else
+#define rdtsc() 0
 #endif
 
 #ifndef __KERNEL__
@@ -109,11 +105,7 @@ typedef int32_t sdword_t;
 typedef uint16_t word_t;
 typedef uint8_t byte_t;
 
-#ifdef GUEST_ARM64
 typedef uint64_t addr_t;
-#else
-typedef dword_t addr_t;
-#endif
 typedef dword_t uint_t;
 typedef sdword_t int_t;
 
@@ -121,11 +113,7 @@ typedef sdword_t pid_t_;
 typedef dword_t uid_t_;
 typedef word_t mode_t_;
 typedef sqword_t off_t_;
-#ifdef GUEST_ARM64
 typedef sqword_t time_t_;
-#else
-typedef dword_t time_t_;
-#endif
 typedef dword_t clock_t_;
 
 #define uint(size) glue3(uint,size,_t)

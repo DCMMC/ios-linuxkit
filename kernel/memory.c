@@ -36,7 +36,6 @@ static void reacquire_read_after_failed_jit_upgrade(wrlock_t *lock) {
 
 
 
-#ifdef GUEST_ARM64
 // ============================================================
 // ARM64: 4-level page table for 48-bit address space
 // ============================================================
@@ -499,120 +498,14 @@ page_t pt_find_hole(struct mem *mem, pages_t size) {
     return BAD_PAGE;
 }
 
-#else
-// ============================================================
-// x86: 2-level flat page table for 32-bit address space
-// ============================================================
-
-void mem_init(struct mem *mem) {
-    mem->pgdir = calloc(MEM_PGDIR_SIZE, sizeof(struct pt_entry *));
-    mem->pgdir_used = 0;
-    mem->mmap_hint = 0;
-    mem->mmu.ops = &mem_mmu_ops;
-    mem->mmu.asbestos = asbestos_new(&mem->mmu);
-    mem->mmu.changes = 0;
-    wrlock_init(&mem->lock);
-    lock_init(&mem->cow_lock);
-}
-
-void mem_destroy(struct mem *mem) {
-    write_wrlock(&mem->lock);
-    pt_unmap_always(mem, 0, MEM_PAGES);
-    asbestos_free(mem->mmu.asbestos);
-    for (int i = 0; i < MEM_PGDIR_SIZE; i++) {
-        if (mem->pgdir[i] != NULL)
-            free(mem->pgdir[i]);
-    }
-    free(mem->pgdir);
-    write_wrunlock(&mem->lock);
-    wrlock_destroy(&mem->lock);
-}
-
-#define PGDIR_TOP(page) ((page) >> 10)
-#define PGDIR_BOTTOM(page) ((page) & (MEM_PGDIR_SIZE - 1))
-
-static struct pt_entry *mem_pt_new(struct mem *mem, page_t page) {
-    struct pt_entry *pgdir = mem->pgdir[PGDIR_TOP(page)];
-    if (pgdir == NULL) {
-        pgdir = mem->pgdir[PGDIR_TOP(page)] = calloc(MEM_PGDIR_SIZE, sizeof(struct pt_entry));
-        mem->pgdir_used++;
-    }
-    return &pgdir[PGDIR_BOTTOM(page)];
-}
-
-struct pt_entry *mem_pt(struct mem *mem, page_t page) {
-    struct pt_entry *pgdir = mem->pgdir[PGDIR_TOP(page)];
-    if (pgdir == NULL)
-        return NULL;
-    struct pt_entry *entry = &pgdir[PGDIR_BOTTOM(page)];
-    if (entry->data == NULL)
-        return NULL;
-    return entry;
-}
-
-static void mem_pt_del(struct mem *mem, page_t page) {
-    struct pt_entry *entry = mem_pt(mem, page);
-    if (entry != NULL)
-        entry->data = NULL;
-}
-
-void mem_next_page(struct mem *mem, page_t *page) {
-    (*page)++;
-    if (*page >= MEM_PAGES)
-        return;
-    while (*page < MEM_PAGES && mem->pgdir[PGDIR_TOP(*page)] == NULL)
-        *page = (*page - PGDIR_BOTTOM(*page)) + MEM_PGDIR_SIZE;
-}
-
-static page_t x86_find_hole_from(struct mem *mem, pages_t size, page_t start) {
-    page_t hole_end = 0;
-    bool in_hole = false;
-    for (page_t page = start; page > 0x40000; page--) {
-        if (!in_hole && mem_pt(mem, page) == NULL) {
-            in_hole = true;
-            hole_end = page + 1;
-        }
-        if (mem_pt(mem, page) != NULL)
-            in_hole = false;
-        else if (hole_end - page == size)
-            return page;
-    }
-    return BAD_PAGE;
-}
-
-page_t pt_find_hole(struct mem *mem, pages_t size) {
-    page_t start = mem->mmap_hint;
-    if (start == 0 || start > 0xefffd || start <= 0x40000 + size)
-        start = 0xefffd;
-
-    page_t result = x86_find_hole_from(mem, size, start);
-    if (result != BAD_PAGE) {
-        mem->mmap_hint = (result > 0) ? result - 1 : 0;
-        return result;
-    }
-
-    if (start < 0xefffd) {
-        result = x86_find_hole_from(mem, size, 0xefffd);
-        if (result != BAD_PAGE) {
-            mem->mmap_hint = (result > 0) ? result - 1 : 0;
-            return result;
-        }
-    }
-
-    return BAD_PAGE;
-}
-
-#endif // GUEST_ARM64
 
 bool pt_is_hole(struct mem *mem, page_t start, pages_t pages) {
     for (page_t page = start; page < start + pages; page++) {
         if (mem_pt(mem, page) != NULL)
             return false;
     }
-#ifdef GUEST_ARM64
     if (mem_range_has_reservation(mem, start, pages))
         return false;
-#endif
     return true;
 }
 
@@ -663,9 +556,7 @@ int pt_unmap_always(struct mem *mem, page_t start, pages_t pages) {
     if (start + pages - 1 > mem->mmap_hint)
         mem->mmap_hint = start + pages - 1;
 
-#ifdef GUEST_ARM64
     mem_remove_reservations(mem, start, pages);
-#endif
 
     for (page_t page = start; page < start + pages; mem_next_page(mem, &page)) {
         struct pt_entry *pt = mem_pt(mem, page);
@@ -719,10 +610,8 @@ int pt_map_nothing(struct mem *mem, page_t start, pages_t pages, unsigned flags)
 int pt_set_flags(struct mem *mem, page_t start, pages_t pages, int flags) {
     for (page_t page = start; page < start + pages; page++) {
         if (mem_pt(mem, page) == NULL) {
-#ifdef GUEST_ARM64
             if (mem_find_reservation(mem, page) != NULL)
                 continue;
-#endif
             return _ENOMEM;
         }
     }
@@ -744,11 +633,9 @@ int pt_set_flags(struct mem *mem, page_t start, pages_t pages, int flags) {
                 return errno_map();
         }
     }
-#ifdef GUEST_ARM64
     int err = mem_set_reservation_flags(mem, start, pages, flags);
     if (err < 0)
         return err;
-#endif
     mem_changed(mem);
     return 0;
 }
@@ -780,7 +667,6 @@ int pt_copy_on_write(struct mem *src, struct mem *dst, page_t start, page_t page
     // These will be decremented per-page when the child's mm is freed.
     atomic_fetch_add(&anon_page_count, anon_copied);
 #endif
-#ifdef GUEST_ARM64
     for (struct mem_reservation *r = src->reservations; r; r = r->next) {
         struct mem_reservation *copy = malloc(sizeof(struct mem_reservation));
         if (copy) {
@@ -789,7 +675,6 @@ int pt_copy_on_write(struct mem *src, struct mem *dst, page_t start, page_t page
             dst->reservations = copy;
         }
     }
-#endif
     mem_changed(src);
     mem_changed(dst);
     return 0;
@@ -826,29 +711,14 @@ void *mem_ptr(struct mem *mem, addr_t addr, int type) {
         mem_next_page(mem, &p);
         while (p < MEM_PAGES && mem_pt(mem, p) == NULL)
             mem_next_page(mem, &p);
-        if (p >= MEM_PAGES) {
-#ifdef GUEST_ARM64
+        if (p >= MEM_PAGES)
             goto check_reservation;
-#else
-            return NULL;
-#endif
-        }
-        if (!(mem_pt(mem, p)->flags & P_GROWSDOWN)) {
-#ifdef GUEST_ARM64
+        if (!(mem_pt(mem, p)->flags & P_GROWSDOWN))
             goto check_reservation;
-#else
-            return NULL;
-#endif
-        }
 
         // Enforce RLIMIT_STACK: don't grow stack beyond the limit.
-#ifdef GUEST_ARM64
         // Stack top is at STACK_TOP_PAGE (guard page), stack grows down from STACK_INIT_PAGE.
         pages_t guard_page = STACK_TOP_PAGE;
-#else
-        // Stack top is at page 0xffffe (guard page), stack grows down from 0xffffd.
-        pages_t guard_page = 0xffffe;
-#endif
         rlim_t_ stack_limit = rlimit(RLIMIT_STACK_);
         if (stack_limit != RLIM_INFINITY_) {
             pages_t stack_pages = guard_page - page;
@@ -892,7 +762,6 @@ void *mem_ptr(struct mem *mem, addr_t addr, int type) {
         entry = mem_pt(mem, page);
         goto have_entry;
 
-#ifdef GUEST_ARM64
 check_reservation: ;
         struct mem_reservation *res = mem_find_reservation(mem, page);
         if (res == NULL)
@@ -917,7 +786,6 @@ check_reservation: ;
         write_wrunlock(&mem->lock);
         read_wrlock(&mem->lock);
         entry = mem_pt(mem, page);
-#endif
     }
 
 have_entry:

@@ -8,28 +8,6 @@
 #include "fs/fd.h"
 #include "fs/path.h"
 
-struct newstat64 stat_convert_newstat64(struct statbuf stat) {
-    struct newstat64 newstat;
-    newstat.dev = stat.dev;
-    newstat.ino_low = stat.inode;
-    newstat.ino = stat.inode;
-    newstat.mode = stat.mode;
-    newstat.nlink = stat.nlink;
-    newstat.uid = stat.uid;
-    newstat.gid = stat.gid;
-    newstat.rdev = stat.rdev;
-    newstat.size = stat.size;
-    newstat.blksize = stat.blksize;
-    newstat.blocks = stat.blocks;
-    newstat.atime = stat.atime;
-    newstat.atime_nsec = stat.atime_nsec;
-    newstat.mtime = stat.mtime;
-    newstat.mtime_nsec = stat.mtime_nsec;
-    newstat.ctime = stat.ctime;
-    newstat.ctime_nsec = stat.ctime_nsec;
-    return newstat;
-}
-
 // ARM64 stat conversion (128 bytes struct)
 struct stat_arm64 stat_convert_arm64(struct statbuf stat) {
     struct stat_arm64 arm64stat = {};
@@ -87,15 +65,9 @@ static dword_t sys_stat_path(fd_t at_f, addr_t path_addr, addr_t statbuf_addr, b
     struct statbuf stat = {};
     if ((err = generic_statat(at, path, &stat, follow_links)) < 0)
         return err;
-#ifdef GUEST_ARM64
     struct stat_arm64 arm64stat = stat_convert_arm64(stat);
     if (user_put(statbuf_addr, arm64stat))
         return _EFAULT;
-#else
-    struct newstat64 newstat = stat_convert_newstat64(stat);
-    if (user_put(statbuf_addr, newstat))
-        return _EFAULT;
-#endif
     return 0;
 }
 
@@ -120,15 +92,9 @@ dword_t sys_fstat64(fd_t fd_no, addr_t statbuf_addr) {
     int err = fd->mount->fs->fstat(fd, &stat);
     if (err < 0)
         return err;
-#ifdef GUEST_ARM64
     struct stat_arm64 arm64stat = stat_convert_arm64(stat);
     if (user_put(statbuf_addr, arm64stat))
         return _EFAULT;
-#else
-    struct newstat64 newstat = stat_convert_newstat64(stat);
-    if (user_put(statbuf_addr, newstat))
-        return _EFAULT;
-#endif
     return 0;
 }
 

@@ -36,42 +36,20 @@ void dump_stack(int lines);
 void dump_maps(void);
 
 // Fast path syscall handlers (forward declarations)
-#ifdef GUEST_ARM64
 static inline int fast_fstat64(struct cpu_state *cpu);
 static inline int fast_read(struct cpu_state *cpu);
 static inline int fast_write(struct cpu_state *cpu);
-#endif
 
 // Diagnostic: JIT crash info from signal handler
 __thread volatile uint64_t jit_last_host_fault = 0;
 __thread volatile uint64_t jit_last_x7 = 0;
 __thread volatile uint64_t jit_last_x10 = 0;
 __thread volatile int jit_crash_count = 0;
-#ifdef GUEST_ARM64
 volatile bool g_trace_faults = false;
-#endif
 
 void handle_interrupt(int interrupt) {
     struct cpu_state *cpu = &current->cpu;
     if (interrupt == INT_SYSCALL) {
-#if defined(GUEST_X86) || !defined(GUEST_ARM64)
-        // x86: syscall number in eax, args in ebx, ecx, edx, esi, edi, ebp
-        unsigned syscall_num = cpu->eax;
-        if (syscall_num >= syscall_table_size || syscall_table[syscall_num] == NULL) {
-            printk("%d(%s) missing syscall %d\n", current->pid, current->comm, syscall_num);
-            cpu->eax = _ENOSYS;
-        } else {
-            if (syscall_table[syscall_num] == (syscall_t) syscall_stub) {
-                printk("%d(%s) stub syscall %d\n", current->pid, current->comm, syscall_num);
-            }
-            STRACE("%d call %-3d ", current->pid, syscall_num);
-            int result = syscall_table[syscall_num](cpu->ebx, cpu->ecx, cpu->edx, cpu->esi, cpu->edi, cpu->ebp);
-            STRACE(" = 0x%x\n", result);
-            cpu->eax = result;
-        }
-        if (current->group->doing_group_exit)
-            do_exit(current->group->group_exit_code);
-#elif defined(GUEST_ARM64)
         // ARM64: syscall number in x8, args in x0-x5, return in x0
         unsigned syscall_num = cpu->regs[8];
 
@@ -168,12 +146,10 @@ void handle_interrupt(int interrupt) {
         // loop where receive_signals() handles SIGKILL. Catch it here.
         if (current->group->doing_group_exit)
             do_exit(current->group->group_exit_code);
-#endif
     } else if (interrupt == INT_GPF) {
         read_wrlock(&current->mem->lock);
         void *ptr = mem_ptr(current->mem, cpu->segfault_addr, cpu->segfault_was_write ? MEM_WRITE : MEM_READ);
         read_wrunlock(&current->mem->lock);
-#ifdef GUEST_ARM64
         // Read fault on unmapped page near a heap mapping: demand-map as
         // readable zeros. On native Linux, heap regions are contiguous so
         // out-of-bounds reads access adjacent allocations (no SIGSEGV). In iSH,
@@ -205,9 +181,7 @@ void handle_interrupt(int interrupt) {
                 write_wrunlock(&current->mem->lock);
             }
         }
-#endif
         if (ptr == NULL) {
-#ifdef GUEST_ARM64
             // V8 Zone memory reuse workaround: V8's Zone bump allocator reuses
             // memory without zeroing. A DeclarationScope can be allocated over
             // stale Variable data, inheriting -1 sentinel values in uninitialized
@@ -466,10 +440,6 @@ void handle_interrupt(int interrupt) {
                 }
                 }  // is_sentinel
             }  // scope block
-#endif
-#if defined(GUEST_X86) || !defined(GUEST_ARM64)
-            printk("%d page fault on 0x%x at 0x%x\n", current->pid, cpu->segfault_addr, cpu->eip);
-#elif defined(GUEST_ARM64)
             if (g_trace_faults) {
                 printk("%d page fault on 0x%llx at 0x%llx (%s)\n", current->pid, (unsigned long long)cpu->segfault_addr, (unsigned long long)cpu->pc, cpu->segfault_was_write ? "write" : "read");
                 // Dump instruction bytes and key registers for debugging
@@ -512,7 +482,6 @@ void handle_interrupt(int interrupt) {
                     }
                 }
             }
-#endif
             // Read-fault recovery: if a load instruction reads from unmapped
             // memory, set destination register to 0 and advance PC.
             // This handles cases where guest code makes out-of-bounds reads
@@ -586,30 +555,14 @@ void handle_interrupt(int interrupt) {
                 .code = mem_segv_reason(current->mem, cpu->segfault_addr),
                 .fault.addr = cpu->segfault_addr,
             };
-#if defined(GUEST_X86) || !defined(GUEST_ARM64)
-            dump_stack(8);
-            dump_maps();
-#elif defined(GUEST_ARM64)
             if (g_trace_faults) {
                 dump_stack(8);
                 dump_maps();
             }
-#endif
             deliver_signal(current, SIGSEGV_, info);
         }
-#ifdef GUEST_ARM64
         gpf_handled:;
-#endif
     } else if (interrupt == INT_UNDEFINED) {
-#if defined(GUEST_X86) || !defined(GUEST_ARM64)
-        printk("%d illegal instruction at 0x%x: ", current->pid, cpu->eip);
-        for (int i = 0; i < 8; i++) {
-            uint8_t b;
-            if (user_get(cpu->eip + i, b))
-                break;
-            printk("%02x ", b);
-        }
-#elif defined(GUEST_ARM64)
         {
             uint32_t ill_insn = 0;
             for (int i = 0; i < 4; i++) {
@@ -620,20 +573,14 @@ void handle_interrupt(int interrupt) {
             }
             printk("%d illegal instruction at 0x%llx: insn=0x%08x\n", current->pid, (unsigned long long)cpu->pc, ill_insn);
         }
-#endif
         printk("\n");
         dump_stack(8);
         struct siginfo_ info = {
             .code = SI_KERNEL_,
-#if defined(GUEST_X86) || !defined(GUEST_ARM64)
-            .fault.addr = cpu->eip,
-#elif defined(GUEST_ARM64)
             .fault.addr = cpu->pc,
-#endif
         };
         deliver_signal(current, SIGILL_, info);
     } else if (interrupt == INT_BREAKPOINT) {
-#ifdef GUEST_ARM64
         {
             uint32_t brk_insn = 0;
             for (int j = 0; j < 4; j++) {
@@ -646,7 +593,6 @@ void handle_interrupt(int interrupt) {
             // BRK #0xBC handler: V8 derived constructor new.target fix
             // (binary trampoline at code cave handles this now — no BRK needed)
         }
-#endif
         lock(&pids_lock);
         send_signal(current, SIGTRAP_, (struct siginfo_) {
             .sig = SIGTRAP_,
@@ -697,11 +643,7 @@ void dump_mem(addr_t start, uint_t len) {
     for (addr_t addr = start; addr < start + len; addr += sizeof(dword_t)) {
         unsigned from_left = (addr - start) / sizeof(dword_t) % width;
         if (from_left == 0)
-#ifdef GUEST_ARM64
             printk("%012llx: ", (unsigned long long)addr);
-#else
-            printk("%08x: ", addr);
-#endif
         dword_t word;
         if (user_get(addr, word))
             break;
@@ -712,20 +654,14 @@ void dump_mem(addr_t start, uint_t len) {
 }
 
 void dump_stack(int lines) {
-#if defined(GUEST_X86) || !defined(GUEST_ARM64)
-    printk("stack at %x, base at %x, ip at %x\n", current->cpu.esp, current->cpu.ebp, current->cpu.eip);
-    dump_mem(current->cpu.esp, lines * sizeof(dword_t) * 8);
-#elif defined(GUEST_ARM64)
     printk("stack at %llx, base at %llx, ip at %llx\n",
            (unsigned long long)current->cpu.sp,
            (unsigned long long)current->cpu.regs[29],  // x29 is frame pointer
            (unsigned long long)current->cpu.pc);
     dump_mem(current->cpu.sp, lines * sizeof(uint64_t) * 8);
-#endif
 }
 
 // === Fast Path Implementations ===
-#ifdef GUEST_ARM64
 
 // Fast path for fstat64 (syscall 80)
 // Bypasses generic_statat path normalization when fd is already validated realfs
@@ -874,5 +810,3 @@ static inline int fast_write(struct cpu_state *cpu) {
 
     return res;
 }
-
-#endif // GUEST_ARM64

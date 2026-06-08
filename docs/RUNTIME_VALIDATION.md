@@ -6,7 +6,7 @@ This file describes the validation gates used before advertising a runtime chang
 
 | Item | Value |
 |---|---|
-| Core report | `/workspace/tmp/ish-arm64-runtime-coverage-20260517-092759.md` |
+| Core report | `/workspace/tmp/ish-arm64-runtime-coverage-20260519-214307.md` |
 | Core result | **83 / 83 passing** |
 | Binary | `build-arm64-linux/ish` |
 | Rootfs | `alpine-arm64-fakefs` |
@@ -16,7 +16,7 @@ This file describes the validation gates used before advertising a runtime chang
 | Timeouts | Latest Alpine gate used `TIMEOUT_S=120`, `INSTALL_TIMEOUT_S=1200`; broad/local gate command below keeps `TIMEOUT_S=180` for margin. |
 | Required diagnostics | `SAFETY-VALVE=0`, `NETDIAG=0` in clean core logs |
 
-Related docs: [workload smoke tests](ARM64_WORKLOAD_SMOKE_TESTS.md), [syscall coverage ledger](ARM64_SMOKE_ISSUES_AND_SYSCALL_COVERAGE.md), [executor plan](ARM64_GADGET_FUSION_PLAN.md).
+Related docs: [workload smoke tests](ARM64_WORKLOAD_SMOKE_TESTS.md), [syscall coverage ledger](ARM64_SMOKE_ISSUES_AND_SYSCALL_COVERAGE.md).
 
 ## Gates
 
@@ -24,7 +24,7 @@ Related docs: [workload smoke tests](ARM64_WORKLOAD_SMOKE_TESTS.md), [syscall co
 |---|---|---|
 | Build | `make build-arm64-linux-all` | Linux ARM64 release/debug variants build. |
 | Core runtime | `make test-arm64-runtime-coverage REPORT_DIR=/workspace/tmp TIMEOUT_S=180 INSTALL_TIMEOUT_S=1200` | Markdown report; current baseline **83 / 83**. |
-| CLI corner cases | `make test-arm64-cli-corner-smoke ROOTFS_LANES=alpine=$(pwd)/alpine-arm64-fakefs REPORT_DIR=/workspace/tmp TIMEOUT_S=240 INSTALL_TIMEOUT_S=1200` | Current baseline **27 pass / 2 unsupported / 0 fail**. |
+| CLI corner cases | `make test-arm64-cli-corner-smoke ROOTFS_LANES=alpine=$(pwd)/alpine-arm64-fakefs REPORT_DIR=/workspace/tmp TIMEOUT_S=240 INSTALL_TIMEOUT_S=1200` | Current baseline **57 pass / 2 unsupported / 0 fail**. |
 | npm CLI package lane | `make test-arm64-npm-cli-runtime-coverage ROOTFS_LANES=alpine=$(pwd)/alpine-arm64-fakefs REPORT_DIR=/workspace/tmp TIMEOUT_S=180 INSTALL_TIMEOUT_S=1800` | Current baseline **16 / 16**. |
 | Node/Bun timing | `make test-arm64-node-bun-perf ROOTFS_LANES=alpine=$(pwd)/alpine-arm64-fakefs REPORT_DIR=/workspace/tmp TIMEOUT_S=180` | Timing/status table for executor changes. |
 
@@ -49,17 +49,17 @@ Related docs: [workload smoke tests](ARM64_WORKLOAD_SMOKE_TESTS.md), [syscall co
 |---|---|
 | IPC | SysV shared memory, SysV message queues, semaphores, POSIX message queues. |
 | Modern syscalls | `signalfd4`, scheduler priority calls, `memfd_create`, `openat2`, `faccessat2`, `fchmodat2(AT_EMPTY_PATH)`, `preadv2`, `pwritev2`, `process_vm_readv`, `process_vm_writev`. |
-| Sockets | UDP/TCP, socket options, `sendmsg`/`recvmsg`, ARM64 `SCM_RIGHTS`, oversized UDP `recvfrom()` source buffers. |
+| Sockets | UDP/TCP, socket options including UDP `IP_RECVERR`/`IPV6_RECVERR`, `sendmsg`/`recvmsg`, ARM64 `SCM_RIGHTS`, oversized UDP `recvfrom()` source buffers. |
 | ARM64 | `DCZID_EL0`/`dc zva`, signal `ucontext_t`, per-thread `sigaltstack`, CCMP/CCMN `NV`, DMB/DSB/ISB, self-modifying code. |
 
 ## Optional/diagnostic lanes
 
 | Lane | Purpose | Current status |
 |---|---|---|
-| CLI corner cases | TUI tools, DNS/HTTPS, GitHub clone, Docker CLI/daemon diagnostics, `strace`, `lsof`, netlink visibility. | **27 pass / 2 unsupported / 0 fail**. Docker daemon/container rows are unsupported without container kernel primitives. |
+| CLI corner cases | TUI tools, DNS/HTTPS, GitHub clone, Docker CLI/daemon diagnostics, `strace`, `lsof`, netlink visibility. | **57 pass / 2 unsupported / 0 fail**. `dig` DNS now passes through real UDP; Docker daemon/container rows are unsupported without container kernel primitives. |
 | npm CLI package lane | Unauthenticated install/startup/help/version probes for npm-installed CLIs. | **16 / 16** in Alpine npm lane. Debian/glibc lane remains blocked by thread/libuv assertions. |
-| Node/Bun perf | Timing table for executor changes and optional block/prechain/hot-trace statistics. | Use before/after dispatch optimization work; default reports must stay free of stats output. Latest default/gated Phase 4 pair: `/workspace/tmp/ish-arm64-node-bun-perf-20260517-092629.md` and `/workspace/tmp/ish-arm64-node-bun-perf-20260517-092700.md`, both **10 / 10**. |
-| ARM64 executor diagnostics | `ISH_ARM64_BLOCK_STATS=1`, `ISH_ARM64_FUSION_STATS=1`, and dry-run `ISH_ARM64_HOT_TRACE=1` counters. | Opt-in only; do not run exact-output runtime coverage with these diagnostics because they intentionally write `ARM64_*_STATS` lines. Current hot-trace diagnostics are measurement-only and default-off: no trace builder, guarded exits, invalidation epoch changes, or generated-code behavior changes. |
+| Node/Bun perf | Timing table for executor changes and optional block/prechain statistics. | Use before/after dispatch optimization work. |
+| ARM64 executor diagnostics | `ISH_ARM64_BLOCK_STATS=1` and `ISH_ARM64_FUSION_STATS=1` counters. | Opt-in only; do not run exact-output runtime coverage with these diagnostics because they intentionally write `ARM64_*_STATS` lines. |
 | NativeAOT publish | Full `dotnet publish -p:PublishAot=true`. | Opt-in only via `ISH_ARM64_DOTNET_AOT_PUBLISH=1`; current focused probes stall in Roslyn `csc` after restore. |
 
 ## Failure rules
@@ -72,3 +72,7 @@ A row is not a pass when any of these happen:
 4. A row is silently skipped instead of reported as passing, failing, or unsupported.
 
 When fixing a runtime bug, add or update a focused row in the relevant harness so the failure stays covered.
+
+## Go compiler note
+
+Alpine 3.23's `go` package provides standard-library source but no precompiled `/usr/lib/go/pkg/linux_arm64` archives, so cold-cache `go run` can exceed the standard timeout. Use `TIMEOUT_S=600` when running full coverage on a cold Go cache. ARM64 incoming eager prechain is enabled by default; `ISH_ARM64_EAGER_PRECHAIN_INCOMING=0` is available as a diagnostic opt-out.

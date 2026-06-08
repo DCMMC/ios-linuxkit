@@ -181,6 +181,7 @@ static inline int sock_type_to_real(int type, int protocol) {
 #define MSG_DONTWAIT_ 0x40
 #define MSG_EOR_    0x80
 #define MSG_WAITALL_ 0x100
+#define MSG_ERRQUEUE_ 0x2000
 
 static inline int sock_flags_to_real(int fake) {
     int real = 0;
@@ -191,7 +192,10 @@ static inline int sock_flags_to_real(int fake) {
     if (fake & MSG_DONTWAIT_) real |= MSG_DONTWAIT;
     if (fake & MSG_EOR_) real |= MSG_EOR;
     if (fake & MSG_WAITALL_) real |= MSG_WAITALL;
-    if (fake & ~(MSG_OOB_|MSG_PEEK_|MSG_CTRUNC_|MSG_TRUNC_|MSG_DONTWAIT_|MSG_EOR_|MSG_WAITALL_))
+#ifdef MSG_ERRQUEUE
+    if (fake & MSG_ERRQUEUE_) real |= MSG_ERRQUEUE;
+#endif
+    if (fake & ~(MSG_OOB_|MSG_PEEK_|MSG_CTRUNC_|MSG_TRUNC_|MSG_DONTWAIT_|MSG_EOR_|MSG_WAITALL_|MSG_ERRQUEUE_))
         TRACE("unimplemented socket flags %d\n", fake);
     return real;
 }
@@ -204,7 +208,14 @@ static inline int sock_flags_from_real(int real) {
     if (real & MSG_DONTWAIT) fake |= MSG_DONTWAIT_;
     if (real & MSG_EOR) fake |= MSG_EOR_;
     if (real & MSG_WAITALL) fake |= MSG_WAITALL_;
-    if (real & ~(MSG_OOB|MSG_PEEK|MSG_CTRUNC|MSG_TRUNC|MSG_DONTWAIT|MSG_EOR|MSG_WAITALL))
+#ifdef MSG_ERRQUEUE
+    if (real & MSG_ERRQUEUE) fake |= MSG_ERRQUEUE_;
+#endif
+    if (real & ~(MSG_OOB|MSG_PEEK|MSG_CTRUNC|MSG_TRUNC|MSG_DONTWAIT|MSG_EOR|MSG_WAITALL
+#ifdef MSG_ERRQUEUE
+        |MSG_ERRQUEUE
+#endif
+        ))
         TRACE("unimplemented socket flags %d\n", real);
     return fake;
 }
@@ -231,6 +242,7 @@ static inline int sock_flags_from_real(int real) {
 #define IP_HDRINCL_ 3
 #define IP_RETOPTS_ 7
 #define IP_MTU_DISCOVER_ 10
+#define IP_RECVERR_ 11
 #define IP_RECVTTL_ 12
 #define IP_RECVTOS_ 13
 #define TCP_NODELAY_ 1
@@ -241,6 +253,7 @@ static inline int sock_flags_from_real(int real) {
 #define TCP_INFO_ 11
 #define TCP_CONGESTION_ 13
 #define IPV6_UNICAST_HOPS_ 16
+#define IPV6_RECVERR_ 25
 #define IPV6_V6ONLY_ 26
 #define IPV6_TCLASS_ 67
 #define ICMP6_FILTER_ 1
@@ -281,11 +294,23 @@ static inline int sock_opt_to_real(int fake, int level) {
             case IP_TTL_: return IP_TTL;
             case IP_HDRINCL_: return IP_HDRINCL;
             case IP_RETOPTS_: return IP_RETOPTS;
+            case IP_RECVERR_:
+#ifdef IP_RECVERR
+                return IP_RECVERR;
+#else
+                return 0;
+#endif
             case IP_RECVTTL_: return IP_RECVTTL;
             case IP_RECVTOS_: return IP_RECVTOS;
         } break;
         case IPPROTO_IPV6: switch (fake) {
             case IPV6_UNICAST_HOPS_: return IPV6_UNICAST_HOPS;
+            case IPV6_RECVERR_:
+#ifdef IPV6_RECVERR
+                return IPV6_RECVERR;
+#else
+                return 0;
+#endif
             case IPV6_TCLASS_: return IPV6_TCLASS;
             case IPV6_V6ONLY_: return IPV6_V6ONLY;
         } break;

@@ -9,14 +9,9 @@
 #endif
 
 /*
- * ARM64 Linux uses a different syscall numbering than x86.
- * The syscall numbers are based on asm-generic and are mostly sequential.
- *
- * Key differences from x86:
- * - No socketcall() multiplexer - individual socket syscalls
- * - No ipc() multiplexer - individual IPC syscalls
- * - 64-bit stat structures only
- * - Different argument ordering in some syscalls
+ * ARM64 Linux syscall numbers are based on asm-generic and are mostly sequential.
+ * The ABI uses individual socket and IPC syscalls, 64-bit stat structures, and
+ * ARM64-specific argument ordering where Linux defines it.
  */
 
 syscall_t syscall_table[] = {

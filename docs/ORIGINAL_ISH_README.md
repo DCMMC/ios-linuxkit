@@ -8,8 +8,8 @@
 > **This repository is a fork of [ish-app/ish](https://github.com/ish-app/ish)** that adds a
 > **native ARM64 guest backend** to upstream iSH's threaded-code interpreter (*Asbestos*,
 > renamed from *jit* upstream in 2024 — [ish-app/ish@d375656f](https://github.com/ish-app/ish/commit/d375656f)).
-> It emulates AArch64 Linux on Apple Silicon, running alongside the original x86 (i386)
-> guest backend.
+> It emulates AArch64 Linux on Apple Silicon. As of the ARM64-only cleanup, this
+> repository no longer carries the legacy x86 (i386) guest backend.
 >
 > Asbestos is **not a JIT** — it doesn't emit machine code at runtime. For each basic block
 > it builds an array of pointers to pre-compiled native "gadget" functions that tail-call
@@ -27,9 +27,9 @@
 > - **Host integration** — `ISHShellExecutor` (Obj-C shell API), `DebugServer` (JSON-RPC over HTTP),
 >   `Native Offload` (bypass emulation for selected binaries), bind mounts for host↔guest file sharing
 > - **Runtime coverage harness** — Linux-host `make test-arm64-runtime-coverage` gate for shell/C/Go/Bun/Node/npm bring-up
-> - **iOS-first rootfs** — Alpine 3.21 aarch64 with full `apk` ecosystem and versioned overlay patching
+> - **iOS-first rootfs** — Alpine 3.23.4 aarch64 with full `apk` ecosystem and versioned overlay patching
 >
-> **Performance (ARM64 vs x86, compute-heavy):** C `int_arith_2M` **12x faster**,
+> **Historical pre-cleanup performance (ARM64 vs x86, compute-heavy):** C `int_arith_2M` **12x faster**,
 > Python `fib(30)` **9.2x faster**, `sum(1M)` **10.2x faster**, shell `seq+awk 100K` **7.2x faster**.
 >
 > **Full docs:** [ARM64 backend](ARM64_BACKEND.md) · [中文版](ARM64_BACKEND_ZH.md) ·
@@ -79,9 +79,9 @@ Open the project in Xcode, open iSH.xcconfig, and change `ROOT_BUNDLE_IDENTIFIER
 
 To set up your environment, cd to the project and run `meson build` to create a build directory in `build`. Then cd to the build directory and run `ninja`.
 
-To set up a self-contained Alpine linux filesystem, download the Alpine minirootfs tarball for i386 from the [Alpine website](https://alpinelinux.org/downloads/) and run `./tools/fakefsify`, with the minirootfs tarball as the first argument and the name of the output directory as the second argument. Then you can run things inside the Alpine filesystem with `./ish -f alpine /bin/sh`, assuming the output directory is called `alpine`. If `tools/fakefsify` doesn't exist for you in your build directory, that might be because it couldn't find libarchive on your system (see above for ways to install it.)
+To set up a self-contained Alpine linux filesystem in the current ARM64-only tree, download the Alpine aarch64 minirootfs tarball from the [Alpine website](https://alpinelinux.org/downloads/) and run `./tools/fakefsify`, with the minirootfs tarball as the first argument and the output directory name as the second argument. Then run commands inside it with `./ish -f alpine-arm64 /bin/sh`, assuming the output directory is called `alpine-arm64`. If `tools/fakefsify` is missing from your build directory, libarchive may not have been available when Meson configured the tools target.
 
-You can replace `ish` with `tools/ptraceomatic` to run the program in a real process and single step and compare the registers at each step. I use it for debugging. Requires 64-bit Linux 4.11 or later.
+The old ptraceomatic/x86 comparison tooling has been removed with the legacy x86 backend. Use the ARM64 Linux host binary, runtime coverage harness, and SDL/VNC debug harness for current debugging.
 
 ## Logging
 

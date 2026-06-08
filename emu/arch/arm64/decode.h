@@ -8,8 +8,8 @@
 /*
  * ARM64 Instruction Decoding
  *
- * ARM64 uses fixed 4-byte (32-bit) instructions. The instruction encoding
- * is relatively straightforward compared to x86's variable-length encoding.
+ * ARM64 uses fixed 4-byte (32-bit) instructions with regular top-level
+ * encoding groups.
  *
  * Top-level encoding groups (bits 28:25):
  *   0000 - Reserved

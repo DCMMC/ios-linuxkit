@@ -9,7 +9,6 @@
 #include "util/sync.h"
 #include "misc.h"
 
-#ifdef GUEST_ARM64
 // ARM64: 4-level page table for 48-bit address space
 // L0[512] → L1[512] → L2[512] → L3[512 pt_entry]
 // 9+9+9+9 = 36-bit page number + 12-bit offset = 48-bit address
@@ -55,35 +54,17 @@ struct mem {
 
 // Address space layout for ARM64 guest.
 // 48-bit address space with 4-level page table and 48-bit JIT masks.
-// Keep stack and mmap in the low 4GB region (same as x86) so that page table
-// walks are shallow (L0[0]→L1[0]→L2→L3 — the first two levels are always
+// Keep default stack and mmap allocations in the low 4GB region so that page
+// table walks are shallow (L0[0]→L1[0]→L2→L3 — the first two levels are always
 // index 0 and stay hot in cache). The 48-bit infrastructure remains available
 // for explicit high-address mmap hints (e.g., V8 CodeRange).
 #define STACK_TOP_PAGE    0xffffeULL        // guard page at 0xffffe000
 #define STACK_INIT_PAGE   0xffffdULL        // initial stack page (growsdown)
 #define STACK_TOP_ADDR    0xffffe000ULL     // SP starts here
-#define MMAP_HOLE_START   0xefffdULL        // mmap search starts here (same as x86)
+#define MMAP_HOLE_START   0xefffdULL        // mmap search starts here
 #define MMAP_HOLE_END     0x100ULL          // mmap search ends here (above guard pages)
 // Upper bound for valid user addresses (page number, 48-bit / 4K = 36-bit)
 #define USER_ADDR_MAX_PAGE  0xFFFFFFFFFULL
-
-#else
-// x86: 2-level flat page table for 32-bit address space
-// pgdir[1024] → pt_entry[1024]
-#define MEM_PGDIR_SIZE (1 << 10)
-
-struct mem {
-    struct pt_entry **pgdir;
-    int pgdir_used;
-
-    struct mmu mmu;
-
-    page_t mmap_hint;
-
-    wrlock_t lock;
-    lock_t cow_lock;
-};
-#endif
 
 // Initialize the address space
 void mem_init(struct mem *mem);
@@ -139,14 +120,12 @@ struct pt_entry {
 bool pt_is_hole(struct mem *mem, page_t start, pages_t pages);
 page_t pt_find_hole(struct mem *mem, pages_t size);
 
-#ifdef GUEST_ARM64
 page_t pt_find_hole_high(struct mem *mem, pages_t size);
 int pt_map_lazy(struct mem *mem, page_t start, pages_t pages, unsigned flags);
 struct mem_reservation *mem_find_reservation(struct mem *mem, page_t page);
 bool mem_range_has_reservation(struct mem *mem, page_t start, pages_t pages);
 void mem_remove_reservations(struct mem *mem, page_t start, pages_t pages);
 int mem_set_reservation_flags(struct mem *mem, page_t start, pages_t pages, unsigned flags);
-#endif
 
 // Map memory + offset into fake memory, unmapping existing mappings. Takes
 // ownership of memory. It will be freed with:

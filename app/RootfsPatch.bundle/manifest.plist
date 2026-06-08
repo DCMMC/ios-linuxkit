@@ -22,8 +22,14 @@
 			<key>src</key>
 			<string>files/etc/motd</string>
 		</dict>
+		<dict>
+			<key>dst</key>
+			<string>/etc/resolv.conf</string>
+			<key>src</key>
+			<string>files/etc/resolv.conf</string>
+		</dict>
 	</array>
 	<key>version</key>
-	<integer>4</integer>
+	<integer>5</integer>
 </dict>
 </plist>

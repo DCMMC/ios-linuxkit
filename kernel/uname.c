@@ -22,11 +22,7 @@ void do_uname(struct uname *uts) {
     strcpy(uts->hostname, hostname);
     strcpy(uts->release, "4.20.69-linuxkit");
     snprintf(uts->version, sizeof(uts->version), "%s %s %s", uname_version, __DATE__, __TIME__);
-#if defined(GUEST_ARM64)
     strcpy(uts->arch, "aarch64");
-#else
-    strcpy(uts->arch, "i686");
-#endif
     strcpy(uts->domain, "(none)");
 }
 
@@ -47,7 +43,6 @@ static void sysinfo_specific(struct sys_info *info) {
     uint64_t host_mem_unit = host_info.mem_unit ? host_info.mem_unit : 1;
     info->procs = host_info.procs;
 
-#if defined(GUEST_ARM64)
     // Cap reported RAM to avoid musl/V8 allocating enormous arenas.
     // Must be consistent with MEMINFO_MAX_RAM in fs/proc/root.c.
     // Go runtime needs ~1.1GB for page summaries; 4GB gives headroom.
@@ -73,35 +68,6 @@ static void sysinfo_specific(struct sys_info *info) {
 #else
     info->freeram = total_bytes / 2;  // fallback: report 50% free
 #endif
-#else
-    uint64_t max_field = host_info.totalram;
-    if (host_info.freeram > max_field) max_field = host_info.freeram;
-    if (host_info.sharedram > max_field) max_field = host_info.sharedram;
-    if (host_info.totalswap > max_field) max_field = host_info.totalswap;
-    if (host_info.freeswap > max_field) max_field = host_info.freeswap;
-    if (host_info.totalhigh > max_field) max_field = host_info.totalhigh;
-    if (host_info.freehigh > max_field) max_field = host_info.freehigh;
-
-    uint64_t max_bytes = max_field * host_mem_unit;
-    uint64_t out_unit = 1;
-    if (max_bytes > UINT32_MAX)
-        out_unit = (max_bytes + UINT32_MAX - 1) / UINT32_MAX;
-
-#define SCALE_SYSINFO_FIELD(field) \
-    do { \
-        uint64_t bytes = host_info.field * host_mem_unit; \
-        info->field = (dword_t)(bytes / out_unit); \
-    } while (0)
-    SCALE_SYSINFO_FIELD(totalram);
-    SCALE_SYSINFO_FIELD(freeram);
-    SCALE_SYSINFO_FIELD(sharedram);
-    SCALE_SYSINFO_FIELD(totalswap);
-    SCALE_SYSINFO_FIELD(freeswap);
-    SCALE_SYSINFO_FIELD(totalhigh);
-    SCALE_SYSINFO_FIELD(freehigh);
-#undef SCALE_SYSINFO_FIELD
-    info->mem_unit = (dword_t)out_unit;
-#endif
 }
 
 dword_t sys_sysinfo(addr_t info_addr) {
@@ -113,7 +79,6 @@ dword_t sys_sysinfo(addr_t info_addr) {
     info.loads[2] = uptime.load_15m;
     sysinfo_specific(&info);
 
-#if defined(GUEST_ARM64)
     // glibc static binaries sometimes call sysinfo with the __stack_chk_guard address
     // as the buffer. This is a quirk of glibc's raise()/abort() implementation.
     // The canary address is typically in .data.rel.ro section.
@@ -134,7 +99,6 @@ dword_t sys_sysinfo(addr_t info_addr) {
             return 0;
         }
     }
-#endif
 
     if (user_put(info_addr, info))
         return _EFAULT;

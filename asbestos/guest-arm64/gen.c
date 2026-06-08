@@ -4,11 +4,10 @@
  * This file translates ARM64 guest instructions into gadget sequences
  * that can be executed by the asbestos JIT engine.
  *
- * ARM64 uses fixed-width 32-bit instructions, which makes decoding
- * much simpler than x86. The instruction encoding follows a consistent
- * pattern based on the top 4 bits (op0 field).
+ * ARM64 uses fixed-width 32-bit instructions. The instruction encoding
+ * follows a consistent pattern based on the top 4 bits (op0 field).
  *
- * Return value convention (same as x86):
+ * Return value convention:
  *   - return 1 (true): instruction compiled, continue with next instruction
  *   - return 0 (false): block ended (branch, syscall, or error)
  *
@@ -1041,8 +1040,10 @@ void gen_end(struct gen_state *state) {
         if (state->jump_ip[i] != 0) {
             block->jump_ip[i] = &block->code[state->jump_ip[i]];
             block->old_jump_ip[i] = *block->jump_ip[i];
+            block->jump_ip_is_fake[i] = true;
         } else {
             block->jump_ip[i] = NULL;
+            block->jump_ip_is_fake[i] = false;
         }
 
         list_init(&block->jumps_from[i]);

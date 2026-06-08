@@ -35,8 +35,6 @@ typedef struct linux_tty *tty_t;
 @property (nonatomic) BOOL outputInProgress;
 
 @property DelayedUITask *refreshTask;
-@property DelayedUITask *scrollToBottomTask;
-
 @property BOOL applicationCursor;
 @property (nonatomic) NSUInteger windowSizeRequestID;
 @property (nonatomic) int lastWindowCols;
@@ -83,7 +81,6 @@ static NSMapTable<NSUUID *, Terminal *> *terminalsByUUID;
         if (self = [super init]) {
             self.pendingData = [[NSMutableData alloc] initWithCapacity:BUF_SIZE];
             self.refreshTask = [[DelayedUITask alloc] initWithTarget:self action:@selector(refresh)];
-            self.scrollToBottomTask = [[DelayedUITask alloc] initWithTarget:self action:@selector(scrollToBottom)];
 #if !ISH_LINUX
             lock_init(&_dataLock);
             cond_init(&_dataConsumed);
@@ -100,6 +97,24 @@ static NSMapTable<NSUUID *, Terminal *> *terminalsByUUID;
 - (WKWebView *)webView {
     if (_webView == nil) {
         WKWebViewConfiguration *config = [WKWebViewConfiguration new];
+        NSString *bootstrapStyleJSON = [self bootstrapStyleJSONForNewWebView];
+        NSString *bootstrapStyleScript = [NSString stringWithFormat:
+            @"(() => {"
+             "const style = %@;"
+             "window.__terminalInitialStyle = style;"
+             "const apply = () => {"
+                "const root = document.documentElement;"
+                "if (!root) return;"
+                "if (style.backgroundColor) root.style.setProperty('--terminal-background', style.backgroundColor);"
+                "if (style.foregroundColor) root.style.setProperty('--terminal-foreground', style.foregroundColor);"
+             "};"
+             "apply();"
+             "document.addEventListener('DOMContentLoaded', apply, {once: true});"
+            "})();", bootstrapStyleJSON];
+        WKUserScript *bootstrapStyleUserScript = [[WKUserScript alloc] initWithSource:bootstrapStyleScript
+                                                                        injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                                                                     forMainFrameOnly:YES];
+        [config.userContentController addUserScript:bootstrapStyleUserScript];
         [config.userContentController addScriptMessageHandler:self name:@"load"];
         [config.userContentController addScriptMessageHandler:self name:@"log"];
         [config.userContentController addScriptMessageHandler:self name:@"sendInput"];
@@ -112,12 +127,39 @@ static NSMapTable<NSUUID *, Terminal *> *terminalsByUUID;
             _webView.inspectable = YES;
         _webView.layer.drawsAsynchronously = YES;
         _webView.scrollView.scrollEnabled = NO;
+#if USE_XTERM_RENDERER
+        NSURL *xtermHtmlFile = [NSBundle.mainBundle URLForResource:@"xterm-term" withExtension:@"html"];
+#else
         NSURL *xtermHtmlFile = [NSBundle.mainBundle URLForResource:@"term" withExtension:@"html"];
+#endif
         // Give WebKit access to the containing bundle directory so the
         // terminal frontend can load adjacent classic scripts and assets.
         [_webView loadFileURL:xtermHtmlFile allowingReadAccessToURL:xtermHtmlFile.URLByDeletingLastPathComponent];
     }
     return _webView;
+}
+
+- (NSString *)bootstrapStyleJSONForNewWebView {
+    if (self.bootstrapStyleJSON.length > 0)
+        return self.bootstrapStyleJSON;
+
+    UserPreferences *prefs = UserPreferences.shared;
+    Palette *palette = prefs.palette;
+    NSMutableDictionary<NSString *, id> *themeInfo = [@{
+        @"fontFamily": prefs.fontFamily,
+        @"fontSize": prefs.fontSize,
+        @"foregroundColor": palette.foregroundColor,
+        @"backgroundColor": palette.backgroundColor,
+        @"cursorColor": palette.cursorColor ?: palette.foregroundColor,
+        @"blinkCursor": @(prefs.blinkCursor),
+        @"cursorShape": prefs.htermCursorShape,
+    } mutableCopy];
+    if (palette.colorPaletteOverrides)
+        themeInfo[@"colorPaletteOverrides"] = palette.colorPaletteOverrides;
+
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:themeInfo options:0 error:nil];
+    NSString *json = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+    return json ?: @"{}";
 }
 
 #if !ISH_LINUX
@@ -272,12 +314,6 @@ static NSMapTable<NSUUID *, Terminal *> *terminalsByUUID;
         }
     });
 #endif
-    [self.webView evaluateJavaScript:@"exports.setUserGesture()" completionHandler:nil];
-    [self.scrollToBottomTask schedule];
-}
-
-- (void)scrollToBottom {
-    [self.webView evaluateJavaScript:@"exports.scrollToBottom()" completionHandler:nil];
 }
 
 - (NSString *)arrow:(char)direction {
@@ -291,11 +327,14 @@ static NSMapTable<NSUUID *, Terminal *> *terminalsByUUID;
 #if !ISH_LINUX
     lock(&_dataLock);
     if (_outputInProgress) {
-        [self.refreshTask schedule];
         unlock(&_dataLock);
         return;
     }
     NSData *data = _pendingData;
+    if (data.length == 0) {
+        unlock(&_dataLock);
+        return;
+    }
     _pendingData = [[NSMutableData alloc] initWithCapacity:BUF_SIZE];
     _outputInProgress = YES;
     notify(&self->_dataConsumed);
@@ -303,11 +342,11 @@ static NSMapTable<NSUUID *, Terminal *> *terminalsByUUID;
 #else
     NSData *data;
     @synchronized (self) {
-        if (_outputInProgress) {
-            [self.refreshTask schedule];
+        if (_outputInProgress)
             return;
-        }
         data = _pendingData;
+        if (data.length == 0)
+            return;
         _pendingData = [[NSMutableData alloc] initWithCapacity:BUF_SIZE];
         _outputInProgress = YES;
         tty_t tty = self->_tty;
@@ -327,15 +366,20 @@ static NSMapTable<NSUUID *, Terminal *> *terminalsByUUID;
     NSString *jsonArgs = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
     NSString *jsToEvaluate = [NSString stringWithFormat:@"exports.write.apply(null, %@)", jsonArgs ?: @"[\"\"]"];
     [self.webView evaluateJavaScript:jsToEvaluate completionHandler:^(id result, NSError *error) {
+        BOOL needsRefresh = NO;
 #if !ISH_LINUX
         lock(&self->_dataLock);
         self->_outputInProgress = NO;
+        needsRefresh = self->_pendingData.length > 0;
         unlock(&self->_dataLock);
 #else
         @synchronized (self) {
             self->_outputInProgress = NO;
+            needsRefresh = self->_pendingData.length > 0;
         }
 #endif
+        if (needsRefresh)
+            [self.refreshTask schedule];
         if (error != nil) {
             NSLog(@"error sending bytes to the terminal: %@", error);
             return;

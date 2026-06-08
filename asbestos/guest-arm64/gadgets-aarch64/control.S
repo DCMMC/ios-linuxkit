@@ -196,7 +196,7 @@
     ldr _pc, [x14, #16]          // x14[2] = return_cont (block->code or fake_ip)
     // Check if return_cont is chained (bit 63 clear = valid block->code)
     tbnz _pc, #63, ret_unchained
-    // Chained cache hit — continue immediately (no poke check, matches x86)
+    // Chained cache hit — continue immediately (no poke check)
     // Poke will be caught at the next branch via inline_chain
     sub x8, _pc, #FIBER_BLOCK_code
     str x8, [_cpu, #LOCAL_last_block]

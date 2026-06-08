@@ -104,8 +104,8 @@ fi
 
 # ── C benchmark (prefer pre-compiled binary, fallback to gcc) ──
 # Run BEFORE Node.js/Go so that platforms with incomplete runtime support
-# (e.g. x86 iSH missing io_uring syscall used by Node 22) still produce C data.
-# Prebuilt binaries pushed to /tmp/cbench_prebuilt by the host runner.
+# still produce C data. Prebuilt binaries are pushed to /tmp/cbench_prebuilt
+# by the host runner.
 # On native macOS, the script directory is probed for cbench_lite_macos.
 _cbench=""
 _script_dir=$(dirname "$0" 2>/dev/null)
@@ -132,8 +132,8 @@ if command -v go >/tmp/_null 2>&1; then
 fi
 
 # ── Node.js (if available) ─────────────────────────────────
-# Each test wrapped in timeout so x86 iSH (missing io_uring syscall 425)
-# can't hang the whole bench script.
+# Each test is wrapped in timeout so runtime issues cannot hang the whole
+# bench script.
 if command -v node >/tmp/_null 2>&1; then
     _start; timeout 30 node -e 'process.exit(0)';            _end Node.js "startup"
     _start; timeout 30 node -e 'let s=0;for(let i=0;i<1e6;i++)s+=i;console.log(s)' >/tmp/_null 2>/tmp/_null; _end Node.js "sum 1M"
