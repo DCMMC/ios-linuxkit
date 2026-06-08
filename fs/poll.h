@@ -33,6 +33,13 @@ struct poll {
 struct poll_fd {
     // locked by containing struct poll
     struct fd *fd;
+    // Guest fd number this entry was registered under (epoll only; -1 for
+    // poll/select). epoll must key on the fd NUMBER, not the struct fd: a guest
+    // can register two different fds that share one open file description (e.g.
+    // stdout/stderr both pointing at the console, then dup'd), which Linux epoll
+    // treats as distinct. Keying on struct fd wrongly returns EEXIST for the
+    // second, which broke Bun's process.stderr init (claude-code crash).
+    fd_t fd_no;
     struct list fds;
     int types;
     union poll_fd_info {
@@ -71,10 +78,12 @@ struct poll_event {
     int types;
 };
 struct poll *poll_create(void);
-bool poll_has_fd(struct poll *poll, struct fd *fd);
-int poll_add_fd(struct poll *poll, struct fd *fd, int types, union poll_fd_info info);
-int poll_mod_fd(struct poll *poll, struct fd *fd, int types, union poll_fd_info info);
-int poll_del_fd(struct poll *poll, struct fd *fd);
+// poll/select pass fd_no = -1 (they never search by fd number). epoll passes
+// the guest fd number, which is the registration key (see struct poll_fd.fd_no).
+bool poll_has_fd(struct poll *poll, fd_t fd_no);
+int poll_add_fd(struct poll *poll, struct fd *fd, fd_t fd_no, int types, union poll_fd_info info);
+int poll_mod_fd(struct poll *poll, struct fd *fd, fd_t fd_no, int types, union poll_fd_info info);
+int poll_del_fd(struct poll *poll, struct fd *fd, fd_t fd_no);
 // Indicates that the specified events have been triggered. Each call will
 // generate a new edge-triggered notification.
 // please do not call this while holding any locks you would acquire in your poll operation

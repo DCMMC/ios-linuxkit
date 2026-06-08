@@ -592,6 +592,32 @@ void handle_interrupt(int interrupt) {
 
             // BRK #0xBC handler: V8 derived constructor new.target fix
             // (binary trampoline at code cave handles this now — no BRK needed)
+            (void)brk_imm;
+
+            // Safety-net for a non-progressing breakpoint loop. A guest BRK
+            // delivers SIGTRAP; if the guest's own SIGTRAP handler returns to
+            // the SAME breakpoint with identical register state, no forward
+            // progress is possible and the thread spins a CPU forever. This is
+            // exactly what Bun does when it crashes: its panic epilogue runs
+            // Zig's `brk #1` (@trap) to terminate, but its SIGTRAP handler is
+            // still installed, so the trap is caught and sigreturns to the same
+            // pc. On real hardware that terminal trap ends the process; here we
+            // detect the frozen loop (same pc+sp+lr for many consecutive traps;
+            // the first iterations still deliver SIGTRAP so any crash report is
+            // printed) and terminate the process group cleanly.
+            {
+                static _Thread_local uint64_t last_pc = 0, last_sp = 0, last_lr = 0;
+                static _Thread_local int stuck = 0;
+                if (cpu->pc == last_pc && cpu->sp == last_sp && cpu->regs[30] == last_lr) {
+                    if (++stuck >= 16)
+                        do_exit_group(SIGTRAP_ << 8);
+                } else {
+                    last_pc = cpu->pc;
+                    last_sp = cpu->sp;
+                    last_lr = cpu->regs[30];
+                    stuck = 0;
+                }
+            }
         }
         lock(&pids_lock);
         send_signal(current, SIGTRAP_, (struct siginfo_) {
