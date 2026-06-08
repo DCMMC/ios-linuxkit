@@ -22,6 +22,7 @@
 #define CLONE_FS_ 0x00000200
 #define CLONE_FILES_ 0x00000400
 #define CLONE_SIGHAND_ 0x00000800
+#define CLONE_PIDFD_ 0x00001000
 #define CLONE_PTRACE_ 0x00002000
 #define CLONE_VFORK_ 0x00004000
 #define CLONE_PARENT_ 0x00008000
@@ -254,7 +255,15 @@ dword_t sys_clone3(addr_t args_addr, size_t size) {
     if (user_read(args_addr, &args, size))
         return _EFAULT;
 
-    if (args.pidfd != 0 || args.set_tid != 0 || args.set_tid_size != 0 || args.cgroup != 0)
+    // We don't implement pidfd allocation, set_tid, or cgroup placement.
+    // Note: the kernel only treats clone_args.pidfd as meaningful (an output
+    // pointer) when CLONE_PIDFD is set; otherwise the field is ignored. glibc's
+    // clone3-based pthread_create unconditionally sets pidfd = &pd->tid without
+    // requesting CLONE_PIDFD, so rejecting a non-zero pidfd value here breaks
+    // glibc thread creation. Only reject the flag we cannot honor.
+    if (args.flags & CLONE_PIDFD_)
+        return _EINVAL;
+    if (args.set_tid != 0 || args.set_tid_size != 0 || args.cgroup != 0)
         return _EINVAL;
     if (args.exit_signal & ~0xffULL)
         return _EINVAL;
