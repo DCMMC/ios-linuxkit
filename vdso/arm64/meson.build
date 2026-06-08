@@ -39,9 +39,15 @@ if has_vdso_compiler
 else
     # Create a dummy vdso target if no complete compiler/linker is available
     # This allows building for ARM64 guest even without a vdso
-    message('ARM64 VDSO: No suitable cross-compiler/linker found, VDSO will not be built')
-    # Create an empty file as placeholder
-    vdso = custom_target('vdso-arm64-stub',
+    # No aarch64-linux ELF cross-linker available (e.g. Apple/macOS toolchains
+    # without ld.lld, or CI). Fall back to the committed prebuilt vdso instead
+    # of an empty file: an empty vdso has no PT_DYNAMIC and no
+    # __kernel_rt_sigreturn, which makes musl crash on startup and breaks signal
+    # delivery for every guest. The prebuilt is plain aarch64-linux guest code,
+    # so it is valid regardless of the build host.
+    message('ARM64 VDSO: No cross-linker found, using committed libvdso.so.elf.prebuilt')
+    vdso = custom_target('vdso-arm64-prebuilt',
+        input: 'libvdso.so.elf.prebuilt',
         output: 'libvdso.so.elf',
-        command: ['touch', '@OUTPUT@'])
+        command: ['cp', '@INPUT@', '@OUTPUT@'])
 endif

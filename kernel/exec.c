@@ -270,6 +270,19 @@ static int elf_exec(struct fd *fd, const char *file, struct exec_args argv, stru
     }
 
 
+    // The arm64 VDSO ELF is empty when iSH is built without a Linux-ELF
+    // cross-linker (every Apple/macOS toolchain: "VDSO will not be built" ->
+    // a 0-byte libvdso.so.elf gets .incbin'd here). A zero/garbage vdso has no
+    // PT_DYNAMIC, so musl's __dls3 sets vdso.dynv = NULL and then calls
+    // decode_dyn(&vdso) -> decode_vec(NULL) -> NULL deref, SIGSEGV'ing *every*
+    // dynamically-linked guest before main() (this is the -28 terminal bug).
+    // Only advertise the vdso to userspace if it's actually a valid ELF;
+    // otherwise musl falls back to real syscalls for clock_gettime/etc.
+    exec_elf_header *vdso_hdr = (exec_elf_header *) vdso_data;
+    bool vdso_valid = sizeof(vdso_data) >= sizeof(exec_elf_header)
+        && memcmp(&vdso_hdr->magic, ELF_MAGIC, sizeof(vdso_hdr->magic)) == 0
+        && vdso_hdr->phent_count > 0;
+
     // map vdso
     err = _ENOMEM;
     pages_t vdso_pages = sizeof(vdso_data) >> PAGE_BITS;
@@ -338,7 +351,7 @@ static int elf_exec(struct fd *fd, const char *file, struct exec_args argv, stru
 
     // declare elf aux now so we can know how big it is
     struct aux_ent aux[] = {
-        {AX_SYSINFO_EHDR, current->mm->vdso},
+        {vdso_valid ? AX_SYSINFO_EHDR : AX_IGNORE, current->mm->vdso},
         {AX_HWCAP, 0x003}, // FP|ASIMD only. Keep optional crypto/LSE features hidden until helper coverage is clean.
         {AX_PAGESZ, PAGE_SIZE},
         {AX_CLKTCK, 0x64},
