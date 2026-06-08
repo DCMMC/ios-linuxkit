@@ -70,11 +70,12 @@ static inline bool poll_fd_is_real(struct poll_fd *pollfd) {
     return pollfd->fd->ops->poll == realfs_poll;
 }
 
-// does not do its own locking
-static struct poll_fd *poll_find_fd(struct poll *poll, struct fd *fd) {
+// does not do its own locking. Matches on the guest fd NUMBER (epoll's key),
+// so two registrations that share one struct fd are distinct entries.
+static struct poll_fd *poll_find_fd(struct poll *poll, fd_t fd_no) {
     struct poll_fd *poll_fd, *tmp;
     list_for_each_entry_safe(&poll->poll_fds, poll_fd, tmp, fds) {
-        if (poll_fd->fd == fd)
+        if (poll_fd->fd_no == fd_no)
             return poll_fd;
     }
     return NULL;
@@ -88,11 +89,11 @@ static void poll_fd_free(struct poll_fd *poll_fd) {
     list_add(&poll->pollfd_freelist, &poll_fd->fds);
 }
 
-bool poll_has_fd(struct poll *poll, struct fd *fd) {
-    return poll_find_fd(poll, fd) != NULL;
+bool poll_has_fd(struct poll *poll, fd_t fd_no) {
+    return poll_find_fd(poll, fd_no) != NULL;
 }
 
-int poll_add_fd(struct poll *poll, struct fd *fd, int types, union poll_fd_info info) {
+int poll_add_fd(struct poll *poll, struct fd *fd, fd_t fd_no, int types, union poll_fd_info info) {
     int err;
     lock(&fd->poll_lock);
     lock(&poll->lock);
@@ -109,6 +110,7 @@ int poll_add_fd(struct poll *poll, struct fd *fd, int types, union poll_fd_info 
         }
     }
     poll_fd->fd = fd;
+    poll_fd->fd_no = fd_no;
     poll_fd->poll = poll;
     poll_fd->types = types;
     poll_fd->info = info;
@@ -133,11 +135,11 @@ out:
     return err;
 }
 
-int poll_del_fd(struct poll *poll, struct fd *fd) {
+int poll_del_fd(struct poll *poll, struct fd *fd, fd_t fd_no) {
     int err;
     lock(&fd->poll_lock);
     lock(&poll->lock);
-    struct poll_fd *poll_fd = poll_find_fd(poll, fd);
+    struct poll_fd *poll_fd = poll_find_fd(poll, fd_no);
     if (poll_fd == NULL) {
         err = _ENOENT;
         goto out;
@@ -162,11 +164,11 @@ out:
     return err;
 }
 
-int poll_mod_fd(struct poll *poll, struct fd *fd, int types, union poll_fd_info info) {
+int poll_mod_fd(struct poll *poll, struct fd *fd, fd_t fd_no, int types, union poll_fd_info info) {
     int err;
     lock(&fd->poll_lock);
     lock(&poll->lock);
-    struct poll_fd *poll_fd = poll_find_fd(poll, fd);
+    struct poll_fd *poll_fd = poll_find_fd(poll, fd_no);
     if (poll_fd == NULL) {
         err = _ENOENT;
         goto out;
