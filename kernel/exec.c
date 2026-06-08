@@ -351,11 +351,7 @@ static int elf_exec(struct fd *fd, const char *file, struct exec_args argv, stru
 
     // declare elf aux now so we can know how big it is
     struct aux_ent aux[] = {
-#if !defined(GUEST_ARM64)
-        {vdso_valid ? AX_SYSINFO : AX_IGNORE, vdso_entry},
-#endif
         {vdso_valid ? AX_SYSINFO_EHDR : AX_IGNORE, current->mm->vdso},
-#if defined(GUEST_ARM64)
         {AX_HWCAP, 0x003}, // FP|ASIMD only. Keep optional crypto/LSE features hidden until helper coverage is clean.
         {AX_PAGESZ, PAGE_SIZE},
         {AX_CLKTCK, 0x64},
