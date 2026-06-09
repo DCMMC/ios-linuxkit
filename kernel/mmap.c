@@ -347,7 +347,19 @@ int_t sys_mprotect(addr_t addr, addr_t len, int_t prot) {
 
 dword_t sys_madvise(addr_t addr, dword_t len, dword_t advice) {
     STRACE("madvise(0x%llx, 0x%x, %d)", (unsigned long long)addr, len, advice);
-    if (advice == 4 /* MADV_DONTNEED */ || advice == 8 /* MADV_FREE */) {
+    // MADV_DONTNEED (4): immediately discard pages. For ANONYMOUS pages the next
+    // access reads zero, so we can zero them now. For FILE-BACKED MAP_PRIVATE
+    // pages it must revert to the file's content — NOT be zeroed; zeroing them
+    // corrupts loaded code/data when a guest allocator (bun/JSC bmalloc) madvises
+    // a range overlapping the binary's mapped segments (root cause of the JSC
+    // op_enter numCalleeLocals=0 crash). We leave file pages intact (already the
+    // file mapping for non-COW pages).
+    //
+    // MADV_FREE (8): LAZY discard — pages keep their contents until the kernel
+    // reclaims them under memory pressure; if re-accessed first, the data is
+    // intact. So we must NOT touch the contents at all (zeroing them corrupts
+    // bmalloc's decommit-then-reuse pattern). Treat MADV_FREE as advisory no-op.
+    if (advice == 4 /* MADV_DONTNEED */) {
         addr_t end = addr + len;
         for (addr_t p = addr; p < end; p += PAGE_SIZE) {
             read_wrlock(&current->mem->lock);
@@ -357,9 +369,11 @@ dword_t sys_madvise(addr_t addr, dword_t len, dword_t advice) {
                 continue;
             }
 #endif
+            extern long mem_page_state(struct mem *, addr_t, void **, size_t *);
+            long flags = mem_page_state(current->mem, p, NULL, NULL);
             void *ptr = mem_ptr(current->mem, p, MEM_WRITE);
             read_wrunlock(&current->mem->lock);
-            if (ptr != NULL)
+            if (ptr != NULL && (flags & P_ANONYMOUS))
                 memset(ptr, 0, PAGE_SIZE);
         }
     }

@@ -799,6 +799,16 @@ static void mem_changed(struct mem *mem) {
     __atomic_add_fetch(&mem->mmu.changes, 1, __ATOMIC_RELEASE);
 }
 
+// DIAG: report the page-table entry state for a guest address. Returns flags
+// (>=0) or -1 if unmapped. *out_data/*out_off get the backing data ptr+offset.
+long mem_page_state(struct mem *mem, addr_t addr, void **out_data, size_t *out_off) {
+    struct pt_entry *entry = mem_pt(mem, PAGE(addr));
+    if (entry == NULL) return -1;
+    if (out_data) *out_data = entry->data ? entry->data->data : NULL;
+    if (out_off) *out_off = entry->offset;
+    return entry->flags;
+}
+
 // This version will return NULL instead of making necessary pagetable changes.
 // Used by the emulator to avoid deadlocks.
 static void *mem_ptr_nofault(struct mem *mem, addr_t addr, int type) {
