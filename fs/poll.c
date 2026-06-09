@@ -115,6 +115,7 @@ int poll_add_fd(struct poll *poll, struct fd *fd, fd_t fd_no, int types, union p
     poll_fd->types = types;
     poll_fd->info = info;
     poll_fd->triggered_types = 0;
+    poll_fd->disabled = false;
 
     if (poll_fd_is_real(poll_fd)) {
         err = real_poll_update(&poll->real, fd->real_fd, types, poll_fd);
@@ -185,6 +186,8 @@ int poll_mod_fd(struct poll *poll, struct fd *fd, fd_t fd_no, int types, union p
     poll_fd->types = types;
     poll_fd->info = info;
     poll_fd->triggered_types &= types;
+    // EPOLL_CTL_MOD re-arms a previously-fired EPOLLONESHOT fd.
+    poll_fd->disabled = false;
 
     err = 0;
 out:
@@ -245,6 +248,10 @@ int poll_wait(struct poll *poll_, poll_callback_t callback, void *context, struc
         // check if any fds are ready
         struct poll_fd *poll_fd, *tmp;
         list_for_each_entry_safe(&poll_->poll_fds, poll_fd, tmp, fds) {
+            // A fired EPOLLONESHOT fd stays registered but is silenced until an
+            // EPOLL_CTL_MOD re-arms it; skip it so it is not reported again.
+            if (poll_fd->disabled)
+                continue;
             struct fd *fd = poll_fd->fd;
             int poll_types = 0;
             if (fd->ops->poll)
@@ -263,12 +270,15 @@ int poll_wait(struct poll *poll_, poll_callback_t callback, void *context, struc
                 // thundering herd problem at all, but at least the semantics
                 // are right. I'll just leave that as a TODO.
                 if (poll_fd->types & POLL_ONESHOT) {
-                    list_remove(&poll_fd->polls);
-                    list_remove(&poll_fd->fds);
+                    // Disable, but KEEP the registration: EPOLLONESHOT silences
+                    // the fd until EPOLL_CTL_MOD re-arms it. Freeing it here made
+                    // the re-arm fail with ENOENT (poll_find_fd -> NULL), which
+                    // wedged Bun's event-loop stdin reader so claude-code stopped
+                    // responding to keypresses after the first one.
+                    poll_fd->disabled = true;
                     if (poll_fd_is_real(poll_fd)) {
-                        real_poll_update(&poll_->real, fd->real_fd, 0, NULL);
+                        real_poll_update(&poll_->real, fd->real_fd, 0, poll_fd);
                     }
-                    free(poll_fd);
                 }
 
                 if (poll_fd->types & POLL_EDGETRIGGERED) {
