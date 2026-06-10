@@ -1,4 +1,5 @@
 #include <fcntl.h>
+#include <stdlib.h>
 #include <netinet/tcp.h>
 #include <poll.h>
 #include <string.h>
@@ -230,7 +231,41 @@ static void unix_abstract_release(struct unix_abstract *name) {
     unlock(&unix_abstract_lock);
 }
 
-const char *sock_tmp_prefix = "/tmp/ishsock";
+// Host path prefix where bound AF_UNIX sockets are materialized. This is a REAL
+// host filesystem path (the guest's socket is backed by a host socket here), so
+// it must live in a host-writable directory. On macOS "/tmp" is world-writable
+// and works, but on iOS the app sandbox forbids creating files in host /tmp:
+// bind() returns EPERM, which is exactly the failure users saw running tmux
+// ("error creating /tmp/tmux-0/default (operation not permitted)").
+//
+// Honor TMPDIR — iOS and macOS both export it pointing at a per-process,
+// always-writable temp dir (NSTemporaryDirectory on iOS) — and fall back to
+// /tmp when it is unset. The result is cached; the host env doesn't change.
+static const char *sock_tmp_prefix_path(void) {
+    static char prefix[108]; // bounded by sun_path; ENAMETOOLONG guards the rest
+    static int inited = 0;
+    static lock_t init_lock = LOCK_INITIALIZER;
+    if (!inited) {
+        lock(&init_lock);
+        if (!inited) {
+            const char *tmpdir = getenv("TMPDIR");
+            if (tmpdir != NULL && tmpdir[0] == '/') {
+                size_t n = strlen(tmpdir);
+                int ok = snprintf(prefix, sizeof(prefix), "%s%sishsock",
+                                  tmpdir, (n > 0 && tmpdir[n - 1] == '/') ? "" : "/");
+                // If TMPDIR is pathologically long, the per-socket suffix would
+                // never fit sun_path; fall back to /tmp rather than always fail.
+                if (ok < 0 || (size_t) ok >= sizeof(prefix))
+                    strcpy(prefix, "/tmp/ishsock");
+            } else {
+                strcpy(prefix, "/tmp/ishsock");
+            }
+            inited = 1;
+        }
+        unlock(&init_lock);
+    }
+    return prefix;
+}
 
 static int sockaddr_read_bind(addr_t sockaddr_addr, void *sockaddr, uint_t *sockaddr_len, struct fd *bind_fd) {
     // Make sure we can read things without overflowing buffers
@@ -282,7 +317,7 @@ static int sockaddr_read_bind(addr_t sockaddr_addr, void *sockaddr, uint_t *sock
 
             struct sockaddr_un *real_addr_un = sockaddr;
             int path_len = snprintf(real_addr_un->sun_path, sizeof(real_addr_un->sun_path),
-                                    "%s%d.%u", sock_tmp_prefix, getpid(), socket_id);
+                                    "%s%d.%u", sock_tmp_prefix_path(), getpid(), socket_id);
             if (path_len < 0 || (size_t) path_len >= sizeof(real_addr_un->sun_path))
                 return _ENAMETOOLONG;
             // The call to real bind will fail if the backing socket already

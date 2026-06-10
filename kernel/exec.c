@@ -352,7 +352,18 @@ static int elf_exec(struct fd *fd, const char *file, struct exec_args argv, stru
     // declare elf aux now so we can know how big it is
     struct aux_ent aux[] = {
         {vdso_valid ? AX_SYSINFO_EHDR : AX_IGNORE, current->mm->vdso},
-        {AX_HWCAP, 0x003}, // FP|ASIMD only. Keep optional crypto/LSE features hidden until helper coverage is clean.
+#if defined(GUEST_ARM64)
+        // FP|ASIMD|AES|PMULL|SHA1|SHA2 (0x7b). Crypto extensions are now
+        // advertised: their gadgets are verified correct (OpenSSL AES-GCM/SHA
+        // KATs pass via every crypto-ext path). This matters because BoringSSL
+        // (Bun/claude-code), when PMULL is hidden, falls back to a hand-rolled
+        // vmull_p8-synthesis NEON GHASH that miscomputes the GCM tag here ->
+        // every TLS handshake failed. With PMULL advertised it uses the correct
+        // PMULL GHASH; AES/SHA hw paths also speed up crypto. LSE still hidden.
+        {AX_HWCAP, 0x07b},
+#else
+        {AX_HWCAP, 0x00000000}, // suck that
+#endif
         {AX_PAGESZ, PAGE_SIZE},
         {AX_CLKTCK, 0x64},
         {AX_PHDR, load_addr + header.prghead_off},
@@ -763,7 +774,10 @@ dword_t sys_execve(addr_t filename_addr, addr_t argv_addr, addr_t envp_addr) {
     // mode=0: inject only if not present, mode=1: replace existing value
     static const struct { const char *kv; size_t prefix_len; int mode; } inject_envs[] = {
         { "PYTHONMALLOC=malloc", 13, 1 },      // FORCE bypass pymalloc arenas (mode=1: always replace)
-        { "NO_COLOR=1", 9, 0 },                // Disable color output
+        // Enable 24-bit color (ghostty-web supports truecolor). Previously the
+        // engine force-injected NO_COLOR=1, which made claude/every CLI render
+        // monochrome; dropped so apps honor TERM=xterm-256color + COLORTERM.
+        { "COLORTERM=truecolor", 10, 0 },      // mode=0: only if the app didn't set it
         { "PIP_PROGRESS_BAR=off", 17, 0 },     // Disable pip progress bar
         { "PYTHONDONTWRITEBYTECODE=1", 25, 0 }, // Skip .pyc generation to reduce allocs
         // Go async preemption sends SIGURG and reads/modifies mcontext at a

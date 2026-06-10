@@ -31,9 +31,9 @@ static int proc_show_cpuinfo(struct proc_entry *UNUSED(entry), struct proc_data 
     for (unsigned i = 0; i < cpus; i++) {
         proc_printf(buf, "processor\t: %u\n", i);
         proc_printf(buf, "BogoMIPS\t: 48.00\n");
-        // Keep /proc/cpuinfo aligned with AT_HWCAP: report only the conservative
-        // baseline until optional crypto/LSE helpers are coverage-clean.
-        proc_printf(buf, "Features\t: fp asimd evtstrm\n");
+        // Keep /proc/cpuinfo aligned with AT_HWCAP (0x7b): crypto extensions are
+        // verified clean and now advertised (aes/pmull/sha1/sha2). LSE still hidden.
+        proc_printf(buf, "Features\t: fp asimd evtstrm aes pmull sha1 sha2\n");
         proc_printf(buf, "CPU implementer\t: 0x00\n");
         proc_printf(buf, "CPU architecture: 8\n");
         proc_printf(buf, "CPU variant\t: 0x0\n");

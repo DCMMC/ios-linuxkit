@@ -52,6 +52,13 @@ struct poll_fd {
     // call to poll_wait. The bits are cleared by poll_wakeup.
     int triggered_types;
 
+    // EPOLLONESHOT: set true after an event fires so this fd is not reported
+    // again until EPOLL_CTL_MOD re-arms it (which clears this). Crucially the
+    // registration is KEPT (not freed) so the re-arming MOD can still find it —
+    // freeing it made re-arm fail with ENOENT, which broke Bun's stdin reader
+    // (claude-code became unresponsive to keypresses after the first event).
+    bool disabled;
+
     // locked by containing struct fd
     struct poll *poll;
     struct list polls;
