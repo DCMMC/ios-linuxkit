@@ -1,6 +1,6 @@
 # ios-linuxkit workload smoke tests
 
-Updated: 2026-05-17
+Updated: 2026-05-20
 
 This file lists workload-level tests that sit above the core runtime gate. Each row should be reproducible from the Linux-host harness and should produce a bounded pass/fail/unsupported report.
 
@@ -8,10 +8,10 @@ This file lists workload-level tests that sit above the core runtime gate. Each 
 
 | Workload | Status | Why it exists | Report / details |
 |---|---:|---|---|
-| Core runtime coverage | **83 / 83 passing** | Fast regression gate for startup, package manager, syscall ABI, ARM64 fixtures, and language smoke rows. | `/workspace/tmp/ish-arm64-runtime-coverage-20260517-092759.md`; [runtime validation](RUNTIME_VALIDATION.md) |
-| CLI corner cases | **27 pass / 2 unsupported / 0 fail** | TUI, DNS/HTTPS, Git clone, Docker diagnostics, ptrace/netlink visibility, Unix tooling. | `/workspace/tmp/ish-arm64-cli-corner-smoke-20260516-223418.md` |
+| Core runtime coverage | **83 / 83 passing** | Fast regression gate for startup, package manager, syscall ABI, ARM64 fixtures, and language smoke rows. | `/workspace/tmp/ish-arm64-runtime-coverage-20260519-214307.md`; [runtime validation](RUNTIME_VALIDATION.md) |
+| CLI corner cases | **57 pass / 2 unsupported / 0 fail** | TUI, DNS/HTTPS including BIND `dig` UDP, Git clone, Docker diagnostics, ptrace/netlink visibility, Unix tooling, plus bounded application probes derived from the upstream iSH “What works?” wiki. | `/workspace/tmp/ish-arm64-cli-corner-smoke-20260520-*.md` |
 | npm CLI package lane | **16 / 16 passing** | Startup/help/version probes for fast-moving npm CLI packages. | `/workspace/tmp/ish-arm64-cli-package-runtime-coverage-20260515-200605.md` |
-| Node/Bun timing | **10 / 10 passing** | Startup/eval/JSON/FS timings for executor work. | Latest Phase 4 default/gated pair: `/workspace/tmp/ish-arm64-node-bun-perf-20260517-092629.md`, `/workspace/tmp/ish-arm64-node-bun-perf-20260517-092700.md` |
+| Node/Bun timing | **10 / 10 passing** | Startup/eval/JSON/FS timings for executor work. | Latest post-hot-trace-removal pair: default `/workspace/tmp/ish-arm64-node-bun-perf-20260517-162526.md`, stats `/workspace/tmp/ish-arm64-node-bun-perf-20260517-162607.md` |
 | Bun workspace/server | Install/start/listen passing | JS workspace install, recursive copies, JSC behavior, HTTP serving. | internal workload log |
 | `rcarmo/go-gte` | Convert/test/run passing | Go toolchain, Python model conversion, 128 MB model I/O, FP16/NEON paths. | [GO_GTE_PROGRESS.md](GO_GTE_PROGRESS.md) |
 | Benchmarks Game | 10/10 rows for selected runtimes | Cross-language compile/runtime corpus. | [BENCHMARKSGAME_HARNESS.md](BENCHMARKSGAME_HARNESS.md), [BENCHMARKSGAME_MATRIX.md](BENCHMARKSGAME_MATRIX.md) |
@@ -23,7 +23,7 @@ This file lists workload-level tests that sit above the core runtime gate. Each 
 | Core runtime | `make test-arm64-runtime-coverage REPORT_DIR=/workspace/tmp TIMEOUT_S=180 INSTALL_TIMEOUT_S=1200` |
 | CLI corner cases | `make test-arm64-cli-corner-smoke ROOTFS_LANES=alpine=$(pwd)/alpine-arm64-fakefs REPORT_DIR=/workspace/tmp TIMEOUT_S=240 INSTALL_TIMEOUT_S=1200` |
 | npm CLI package lane | `make test-arm64-npm-cli-runtime-coverage ROOTFS_LANES=alpine=$(pwd)/alpine-arm64-fakefs REPORT_DIR=/workspace/tmp TIMEOUT_S=180 INSTALL_TIMEOUT_S=1800` |
-| Node/Bun timing | `make test-arm64-node-bun-perf ROOTFS_LANES=alpine=$(pwd)/alpine-arm64-fakefs REPORT_DIR=/workspace/tmp TIMEOUT_S=180`; add `ISH_ARM64_BLOCK_STATS=1 ISH_ARM64_HOT_TRACE=1` only for opt-in Phase 4 diagnostics. |
+| Node/Bun timing | `make test-arm64-node-bun-perf ROOTFS_LANES=alpine=$(pwd)/alpine-arm64-fakefs REPORT_DIR=/workspace/tmp TIMEOUT_S=180`; add `ISH_ARM64_BLOCK_STATS=1` only when collecting retained block/prechain diagnostics. |
 | Benchmarks Game matrix | `tests/arm64/benchmarksgame/generate-matrix.py` |
 
 ## CLI corner-case coverage
@@ -31,10 +31,11 @@ This file lists workload-level tests that sit above the core runtime gate. Each 
 | Area | Rows / notes |
 |---|---|
 | TUI | `htop` and `btop` run inside detached `tmux` sessions and exit through explicit key paths. |
-| DNS/HTTPS | `curl https://github.com`, `git ls-remote`, and a shallow `rcarmo/go-gte` clone cover c-ares/libcurl and Git. |
+| DNS/HTTPS | `drill example.com`, `dig example.com` (BIND/libuv UDP `IP_RECVERR` path), `curl https://github.com`, `git ls-remote`, and a shallow `rcarmo/go-gte` clone cover DNS, c-ares/libcurl, and Git. |
 | Docker | CLI and `dockerd --version` pass. Daemon startup and `hello-world` are `UNSUPPORTED` when namespaces/cgroups/mount behavior are absent. |
 | Diagnostics | `strace` keeps the known `PTRACE_SETOPTIONS` limitation visible; `iproute2` accepts explicit AF_NETLINK-unavailable diagnostics. |
-| Availability | `nushell`, `xonsh`, `tcpdump`, `bind-tools`, `jq`, Linuxbrew rows report package availability rather than failing silently. |
+| Wiki-derived application probes | Non-interactive checks for known-working iSH wiki programs: shells (`bash`, `zsh`, `fish`), editors (`nano`, `vim`, `nvim`, `ed`), TUI/text tools (`screen`, `mc`, `mutt`, `figlet`, `links`, `lynx`, `w3m`, `eza`), languages (`perl`, `ruby`, `gem`, `php`, `gawk`), media/network/data tools (`ffmpeg`, `wget`, `ssh`, `dropbear`, `lftp`, `adb`, `openssl`, `sqlite3`, `yt-dlp`). |
+| Availability | `xonsh`, Linuxbrew, and unsupported Docker daemon rows report package/runtime availability rather than failing silently. |
 
 ## npm CLI package lane
 
@@ -71,7 +72,7 @@ This file lists workload-level tests that sit above the core runtime gate. Each 
 | PHP Benchmarks Game | SysV shared memory and message queues across `fork()`. |
 | Ruby Benchmarks Game | Poll safety valve now checks all threads before firing. |
 | Java equivalent | `DCZID_EL0`/`dc zva`; `LDPSW` pair-load sign extension. |
-| CLI corner cases | UDP `recvfrom()` now accepts oversized source-address buffers for c-ares/libcurl DNS. |
+| CLI corner cases | UDP `recvfrom()` now accepts oversized source-address buffers for c-ares/libcurl DNS; wiki-derived application probes keep real CLI package startup/version/eval paths covered. |
 
 ## Feasibility ledger
 

@@ -174,7 +174,7 @@ addr_t sys_mmap2(addr_t addr, dword_t len, dword_t prot, dword_t flags, fd_t fd_
 
 #if defined(GUEST_ARM64)
 // ARM64 mmap syscall: offset is passed directly (not shifted like mmap2)
-// and takes 6 direct arguments (not a pointer to a struct like x86 mmap)
+// and takes 6 direct arguments.
 addr_t sys_mmap64(addr_t addr, addr_t len, dword_t prot, dword_t flags, fd_t fd_no, qword_t offset) {
     STRACE("mmap64(0x%llx, 0x%llx, 0x%x, 0x%x, %d, 0x%llx)", (unsigned long long)addr, (unsigned long long)len, prot, flags, fd_no, (unsigned long long)offset);
     if (len == 0)

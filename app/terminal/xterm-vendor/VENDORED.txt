@@ -1,0 +1,28 @@
+xterm.js Terminal Renderer (vendored)
+======================================
+
+Source:   https://github.com/rcarmo/piclaw-addons/tree/main/addons/lite-term/web/vendor
+Date:     2026-06-02
+
+Packages:
+- @xterm/xterm 6.0.0
+- @xterm/addon-attach 0.12.0
+- @xterm/addon-canvas 0.7.0
+- @xterm/addon-clipboard 0.2.0
+- @xterm/addon-fit 0.11.0
+- @xterm/addon-image 0.9.0
+- @xterm/addon-ligatures 0.10.0
+- @xterm/addon-progress 0.2.0
+- @xterm/addon-search 0.16.0
+- @xterm/addon-serialize 0.14.0
+- @xterm/addon-unicode-graphemes 0.4.0
+- @xterm/addon-unicode11 0.9.0
+- @xterm/addon-web-links 0.12.0
+- @xterm/addon-webgl 0.19.0
+
+All MIT licensed by the xterm.js authors.
+
+Build switch:
+- Default (Ghostty): loads term.html → ghostty-web.js + term.js
+- Xterm.js: include XtermRenderer.xcconfig → loads xterm-term.html → xterm-vendor/ + xterm-term-bridge.js
+- Both renderers use the same native bridge API (window.exports / webkit.messageHandlers)

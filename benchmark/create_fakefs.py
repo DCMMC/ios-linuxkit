@@ -5,12 +5,12 @@ Usage:
     python3 create_fakefs.py <rootfs_dir> <output_dir>
 
 Example:
-    # Download Alpine x86 minirootfs
-    mkdir -p alpine-x86-fakefs/data
-    tar xzf alpine-minirootfs-3.21.0-x86.tar.gz -C alpine-x86-fakefs/data
+    # Download Alpine aarch64 minirootfs
+    mkdir -p alpine-arm64-fakefs/data
+    tar xzf alpine-minirootfs-3.23.0-aarch64.tar.gz -C alpine-arm64-fakefs/data
 
     # Create meta.db
-    python3 benchmark/create_fakefs.py alpine-x86-fakefs/data alpine-x86-fakefs
+    python3 benchmark/create_fakefs.py alpine-arm64-fakefs/data alpine-arm64-fakefs
 
 The meta.db stores path→inode mappings and inode→stat blobs for fakefs.
 

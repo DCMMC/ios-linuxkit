@@ -1,13 +1,13 @@
 # ios-linuxkit ARM64 production baseline
 
 Date: 2026-05-10
-Reviewed: 2026-05-17
+Reviewed: 2026-05-22
 
 ## Known-good code
 
-- Code baseline: current `master` at the 2026-05-17 documentation review, successor to tagged validation point `arm64-openjdk21-prod-20260513-r6`; this pass includes expanded language/runtime coverage, ARM64 sysreg/FP16 conversion fixes, bounds-checked path/symlink expansion, guest-signal-aware blocking I/O/exit cleanup, socket ABI hardening through ARM64 `SCM_RIGHTS` control-message validation, `fchmodat2(AT_EMPTY_PATH)` and scheduler priority syscall coverage, npm CLI package startup coverage, Docker CLI/daemon unsupported diagnostics, opt-in ARM64 internal-continue/taken-internal validation, C# NativeAOT SDK availability, reservation-aware high-address `MAP_NORESERVE` handling, and Phase 4 ARM64 executor reconnaissance counters through dormant hot-trace candidate heavy-hitter diagnostics. The Phase 4 hot-trace work is measurement-only/default-off and does not build traces, add guarded exits, change invalidation epochs, or change generated-code behavior.
-- Previous tagged production audit baseline: `arm64-openjdk21-prod-20260513-r6` (post-r5 validation point covering 44/44 staged coverage, Benchmarks Game refresh, Java mixed/interpreter probes, and go-gte smoke; current `master` adds the later Rust/Cargo, socket ABI, npm CLI package lane, `fchmodat2`, scheduler priority syscall, Docker diagnostic, C# NativeAOT SDK-availability, internal-continue/taken-internal, and high-address reservation audit fixes).
-- Branch: `master`.
+- Code baseline: `go` branch at 2026-05-22, successor to tagged validation point `arm64-openjdk21-prod-20260513-r6`. This pass adds all prior fixes plus an executor performance pass: adjacent same-page `fiber_ret_chain` fast path (−6.6% shell loop, −2.3% Bun JSON) and `GEN_INTERNAL_CONTINUE_MAX` raised 4→6.
+- Previous tagged production audit baseline: `arm64-openjdk21-prod-20260513-r6` (post-r5 validation point covering 44/44 staged coverage, Benchmarks Game refresh, Java mixed/interpreter probes, and go-gte smoke; the current `go` branch adds Rust/Cargo, socket ABI, npm CLI package lane, `fchmodat2`, scheduler priority syscall, Docker diagnostic, C# NativeAOT SDK-availability, internal-continue/taken-internal, high-address reservation, UDP extended-error, and ARM64-only cleanup fixes).
+- Branch: `go`.
 - Remote target for this working branch: `https://github.com/rcarmo/ios-linuxkit.git`; `origin` is configured to this repository for fetch and push.
 
 ## Host used for validation
@@ -38,7 +38,7 @@ Reviewed: 2026-05-17
   - `OpenJDK Runtime Environment (build 21.0.10+7-alpine-r0)`
   - `OpenJDK 64-Bit Server VM (build 21.0.10+7-alpine-r0, mixed mode, sharing)`
 - `javac`: `21.0.10`
-- Go: `go1.25.9-r0` (`go version go1.25.9 linux/arm64`)
+- Go: `go1.25.10-r0` (`go version go1.25.10 linux/arm64`)
 - Node.js: `24.14.1-r0` (`v24.14.1`)
 - Bun: `1.3.13`
 - Python: `3.12.13`
@@ -48,13 +48,13 @@ Reviewed: 2026-05-17
 - Erlang: `erlang27-27.3.4.9-r0`, BEAM emulator `15.2.7.6`
 - Zig: `0.15.2`
 - GCC: `15.2.0-r2`
+- Docker: `29.5.1`
 - musl: `1.2.5-r23`
 
 ## Validation artifacts
 
-- Runtime coverage: `/workspace/tmp/ish-arm64-runtime-coverage-20260517-092759.md`
-  - Result: 83 / 83 passing
-  - Includes no-safety-valve/no-NETDIAG Rust Cargo/std coverage, Erlang helper-thread cleanup validation, UDP/TCP socket-option and `sendmsg`/`recvmsg`/`SCM_RIGHTS` ABI coverage, `fchmodat2(AT_EMPTY_PATH)`, scheduler priority syscall coverage, high-address `MAP_NORESERVE` overlap regression coverage, C# NativeAOT SDK availability, and Python/Lua/Java/Clojure/PyPy/Swift/Rust/Erlang/Zig smoke or availability coverage.
+- Runtime coverage: `/workspace/tmp/ish-arm64-runtime-coverage-20260522-060235.md`
+  - Result: **83 / 83 passing**
 - npm CLI package runtime coverage: `/workspace/tmp/ish-arm64-cli-package-runtime-coverage-20260515-200605.md`
   - Result: 16 / 16 passing on the Alpine npm lane.
   - Includes unauthenticated install/startup/version/help probes for fast-moving npm CLI packages; the Debian/glibc lane remains blocked by thread/libuv thread creation failures.
@@ -69,9 +69,9 @@ Reviewed: 2026-05-17
 ## Production-readiness notes
 
 - OpenJDK default mixed mode is enabled; no `-Xint`, `-XX:-UseCompiler`, `ReplayIgnoreInitErrors`, `DisableIntrinsic`, or runtime/user-data patch is required for the validated Java smoke.
-- The final audit pass also hardens host/guest launch plumbing: initial argv construction is bounds-checked, ELF `PT_INTERP` names are bounded and explicitly NUL-terminated, shebang trimming no longer walks before the optional argument string, and ptraceomatic no longer reads before `getenv("TERM")` while constructing the initial environment.
+- The final audit pass also hardens host/guest launch plumbing: initial argv construction is bounds-checked, ELF `PT_INTERP` names are bounded and explicitly NUL-terminated, and shebang trimming no longer walks before the optional argument string.
 - ARM64 synthetic non-null read-fault recovery remains compile-time gated by `ENABLE_ARM64_READ_FAULT_RECOVERY` and disabled in production builds.
-- Guest self-modifying/JIT-patched code invalidation, `CLREX`, `LDXR` widths, `LDPSW`, `DMB`/`DSB`/`ISB`, per-thread `sigaltstack`, `fchmodat2(AT_EMPTY_PATH)`, scheduler priority syscalls, high-address `MAP_NORESERVE` reservation overlap, C# NativeAOT SDK availability, and Python/Lua/Java/Clojure/PyPy/Swift/Rust/Erlang/Zig toolchain startup/codegen or availability coverage are covered by runtime fixtures. ARM64 hot-trace candidate instrumentation is separate from the runtime fixture gate and remains opt-in diagnostics only (`ISH_ARM64_BLOCK_STATS=1 ISH_ARM64_HOT_TRACE=1`).
+- Guest self-modifying/JIT-patched code invalidation, `CLREX`, `LDXR` widths, `LDPSW`, `DMB`/`DSB`/`ISB`, per-thread `sigaltstack`, `fchmodat2(AT_EMPTY_PATH)`, scheduler priority syscalls, high-address `MAP_NORESERVE` reservation overlap, C# NativeAOT SDK availability, and Python/Lua/Java/Clojure/PyPy/Swift/Rust/Erlang/Zig toolchain startup/codegen or availability coverage are covered by runtime fixtures. Speculative ARM64 hot-trace candidate instrumentation has been removed; retained executor diagnostics are block/chaining/prechain counters only.
 - Host OS differences for sysinfo, thread rusage, fd path lookup, stat timestamp fields, random bytes, thread naming, and memory-pressure hooks are centralized through `platform/platform.h`.
 
 ## Rollback point
@@ -87,4 +87,4 @@ Reviewed: 2026-05-17
 
 - Non-production diagnostic compatibility for ARM64 read-fault recovery exists behind `ENABLE_ARM64_READ_FAULT_RECOVERY`; keep it disabled unless explicitly debugging.
 - Native offload and socket/poll implementations still contain host-specific implementation branches outside `platform/platform.h`; the second socket audit hardened Unix socket backing paths, accept/name buffers, send/receive buffer allocation, ARM64 control-message layout/validation, socket-option buffers, and bind-failure cleanup, but broader host-specific socket/poll cleanup remains a future candidate.
-- Full x86 guest builds remain outside this ARM64 baseline; an audit object build confirmed `kernel_memory.c.o` no longer leaks ARM64 reservation helpers into x86 compilation, while unrelated x86 build failures remain in ARM64-specific `main.c`/`asbestos.c` paths.
+- The legacy x86 guest/backend has been removed from this ARM64-only baseline; keep future validation focused on AArch64 guest behavior and host portability.

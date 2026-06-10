@@ -17,14 +17,14 @@ Darwin-only assumptions through the runtime.
 | Network | Primary wired interface `enP1p49s0`; Wi-Fi device present as `wlP2p1s0` |
 | OS/kernel | Orange Pi 1.0.2 Trixie / Debian Trixie, Linux `6.6.89-cix`, `aarch64` |
 | Toolchain | Clang 19.1.7, Meson 1.7.0, Ninja 1.12.1, GNU Make 4.4.1 |
-| Workspace | `/workspace/projects/ish-arm64` |
+| Workspace | `/workspace/projects/ish-arm64-go` |
 
 ## Current Linux build
 
 Verified on this host with:
 
 ```bash
-cd /workspace/projects/ish-arm64
+cd /workspace/projects/ish-arm64-go
 CC=clang meson setup build-arm64-linux -Dguest_arch=arm64 --buildtype=release
 ninja -C build-arm64-linux
 ```
@@ -40,7 +40,7 @@ Result:
 Verified runnable on Linux with realfs:
 
 ```bash
-cd /workspace/projects/ish-arm64
+cd /workspace/projects/ish-arm64-go
 ./build-arm64-linux/ish -r / /bin/echo hello
 ```
 
@@ -270,7 +270,7 @@ Directory reads now propagate or infer Linux `DT_*` values:
 
 Validation: a minimal Bun recursive `fs.cpSync` directory tree copy succeeds,
 the workspace bootstrap no longer logs the `ENOTSUP ... copyfile` warning, and staged
-runtime coverage remains **83 / 83 passing** (`/workspace/tmp/ish-arm64-runtime-coverage-20260517-092759.md`), with the later `fchmodat2(AT_EMPTY_PATH)`, scheduler priority syscall, C# NativeAOT SDK-availability, high-address `MAP_NORESERVE` reservation-overlap probes, and Phase 4 default-off executor reconnaissance validation included in the staged gate.
+runtime coverage remains **83 / 83 passing** (`/workspace/tmp/ish-arm64-runtime-coverage-20260519-214307.md`).
 
 ## Blocking I/O and exit cleanup
 
@@ -334,9 +334,10 @@ The practical host-facing ABI is now:
 
 ### Executor diagnostics ABI
 
-- Linux/local env gates in `main.c` parse `ISH_ARM64_FUSION_STATS`, `ISH_ARM64_BLOCK_STATS`, and the dormant dry-run `ISH_ARM64_HOT_TRACE` flag.
-- `ISH_ARM64_BLOCK_STATS=1` emits block/chaining/hot-edge diagnostics at process exit.
-- `ISH_ARM64_HOT_TRACE=1` is only meaningful with block stats today; it enables candidate classification/table output for future trace design but does not build traces, add guarded exits, change invalidation epochs, or change generated gadget streams.
+- Linux/local env gates in `main.c` parse `ISH_ARM64_FUSION_STATS` and `ISH_ARM64_BLOCK_STATS`.
+- `ISH_ARM64_BLOCK_STATS=1` emits retained block/chaining/prechain diagnostics at process exit.
+- ARM64 outgoing and guarded incoming same-page prechain are enabled by default. Use `ISH_ARM64_EAGER_PRECHAIN_INCOMING=0` as a diagnostic opt-out.
+- Speculative ARM64 hot-trace diagnostics were attempted but removed after showing no significant gains relative to overhead; there is no trace-record sidecar, guarded trace entry, or generated trace path.
 - Diagnostic `ARM64_*_STATS` output is intentionally kept out of exact-output runtime coverage gates.
 
 ### Runtime compatibility shims

@@ -1,0 +1,7 @@
+// Xterm.js Renderer Configuration
+// Include this xcconfig to use the xterm.js terminal renderer instead of Ghostty WebGL.
+// Useful for lower-spec devices where WebAssembly/WebGL is too heavy.
+//
+// Usage: add #include "XtermRenderer.xcconfig" to your target xcconfig.
+
+GCC_PREPROCESSOR_DEFINITIONS = $(inherited) USE_XTERM_RENDERER=1

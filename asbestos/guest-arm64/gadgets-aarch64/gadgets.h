@@ -47,7 +47,7 @@
  *   a combination of in-memory storage and cached hot registers.
  */
 
-// CPU state pointer (always in x1 for consistency with x86 guest)
+// CPU state pointer (always in x1 for ARM64 guest gadgets)
 _cpu    .req x1
 _tlb    .req x2
 

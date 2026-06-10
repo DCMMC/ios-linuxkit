@@ -4,48 +4,6 @@
 #include "emu/tlb.h"
 
 void cpu() {
-#if defined(GUEST_X86) || !defined(GUEST_ARM64)
-    // x86 register offsets
-    OFFSET(CPU, cpu_state, eax);
-    OFFSET(CPU, cpu_state, ebx);
-    OFFSET(CPU, cpu_state, ecx);
-    OFFSET(CPU, cpu_state, edx);
-    OFFSET(CPU, cpu_state, esi);
-    OFFSET(CPU, cpu_state, edi);
-    OFFSET(CPU, cpu_state, ebp);
-    OFFSET(CPU, cpu_state, esp);
-    OFFSET(CPU, cpu_state, ax);
-    OFFSET(CPU, cpu_state, bx);
-    OFFSET(CPU, cpu_state, cx);
-    OFFSET(CPU, cpu_state, dx);
-    OFFSET(CPU, cpu_state, si);
-    OFFSET(CPU, cpu_state, di);
-    OFFSET(CPU, cpu_state, bp);
-    OFFSET(CPU, cpu_state, sp);
-    OFFSET(CPU, cpu_state, eip);
-    OFFSET(CPU, cpu_state, gs);
-    OFFSET(CPU, cpu_state, tls_ptr);
-
-    OFFSET(CPU, cpu_state, eflags);
-    OFFSET(CPU, cpu_state, of);
-    OFFSET(CPU, cpu_state, cf);
-    OFFSET(CPU, cpu_state, res);
-    OFFSET(CPU, cpu_state, op1);
-    OFFSET(CPU, cpu_state, op2);
-    OFFSET(CPU, cpu_state, flags_res);
-    OFFSET(CPU, cpu_state, df_offset);
-    OFFSET(CPU, cpu_state, fsw);
-    OFFSET(CPU, cpu_state, xmm);
-    MACRO(PF_RES);
-    MACRO(ZF_RES);
-    MACRO(SF_RES);
-    MACRO(AF_OPS);
-    MACRO(PF_FLAG);
-    MACRO(AF_FLAG);
-    MACRO(ZF_FLAG);
-    MACRO(SF_FLAG);
-    MACRO(DF_FLAG);
-#elif defined(GUEST_ARM64)
     // ARM64 register offsets
     OFFSET(CPU, cpu_state, x0);
     OFFSET(CPU, cpu_state, x1);
@@ -104,7 +62,6 @@ void cpu() {
 
     // Cycle counter (for timer interrupts in chained blocks)
     OFFSET(CPU, cpu_state, cycle);
-#endif
 
     // Common offsets
     OFFSET(LOCAL, fiber_frame, bp);
@@ -122,6 +79,7 @@ void cpu() {
     MACRO(MEM_WRITE);
 
     OFFSET(FIBER_BLOCK, fiber_block, addr);
+    OFFSET(FIBER_BLOCK, fiber_block, end_addr);
     OFFSET(FIBER_BLOCK, fiber_block, code);
 
     OFFSET(TLB, tlb, entries);

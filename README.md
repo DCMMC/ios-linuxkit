@@ -22,7 +22,7 @@ The terminal app in this repository is a reference shell. The reusable parts are
 |---|---:|---|
 | Core runtime coverage | **83 / 83 passing** | Alpine ARM64 fakefs; no `SAFETY-VALVE` or `NETDIAG` diagnostics in the latest report. |
 | npm CLI package lane | **16 / 16 passing** | Kept separate because npm packages move quickly. |
-| CLI corner-case smoke | **27 pass / 2 unsupported / 0 fail** | Docker daemon/container rows are recorded as unsupported when kernel primitives are absent. |
+| CLI corner-case smoke | **57 pass / 2 unsupported / 0 fail** | Wiki-derived CLI probes pass; `dig` DNS now uses real UDP successfully; Docker daemon/container rows remain unsupported for known runtime/kernel limitations. |
 | Benchmarks Game rows | **10 / 10 per row** | GCC, G++, Go, Python, Node.js, PHP, Perl, Ruby, Lua. |
 | Java-equivalent Benchmarks Game | **10 / 10** | Mixed-mode and interpreter fallback both pass. |
 
@@ -30,7 +30,7 @@ See [runtime validation](docs/RUNTIME_VALIDATION.md) for commands, reports, and 
 
 ## Executor optimization status
 
-ARM64 executor speed work is documented in [ARM64_GADGET_FUSION_PLAN.md](docs/ARM64_GADGET_FUSION_PLAN.md). Current Phase 4 hot-trace work is deliberately measurement-only and default-off: `ISH_ARM64_BLOCK_STATS=1 ISH_ARM64_HOT_TRACE=1` records candidate-edge counters/table output for future design, but the runtime does not build or execute traces, add guarded exits, change invalidation epochs, allocate executable memory, or change generated gadget streams.
+Speculative ARM64 hot-trace instrumentation was attempted and then removed after it failed to show significant gains relative to its maintenance and runtime overhead. Current retained speed work is limited to validated block chaining/prechain and internal-continue paths; optional `ISH_ARM64_BLOCK_STATS=1` diagnostics report those retained counters only.
 
 ## Validation host
 
@@ -62,7 +62,7 @@ Generated reports are Markdown files under `REPORT_DIR`. A row is not a pass if 
 
 | Question | Short answer |
 |---|---|
-| Why not upstream iSH as-is? | The i386 guest limits address space and runtime compatibility. This fork targets ARM-on-ARM interactive use. |
+| Why not upstream iSH as-is? | The legacy i386 guest limits address space and runtime compatibility. This fork is ARM64-only and targets ARM-on-ARM interactive use. |
 | Is this an App Store product? | No. The checked-in app is a reference terminal and packaging harness. |
 | Why rename it? | To avoid confusion with upstream iSH and make the runtime-kit goal explicit. |
 
@@ -72,7 +72,6 @@ Generated reports are Markdown files under `REPORT_DIR`. A row is not a pass if 
 - [docs/RUNTIME_VALIDATION.md](docs/RUNTIME_VALIDATION.md) — gates, commands, coverage areas, failure rules.
 - [docs/ARM64_WORKLOAD_SMOKE_TESTS.md](docs/ARM64_WORKLOAD_SMOKE_TESTS.md) — heavier workload matrix.
 - [docs/ARM64_BACKEND.md](docs/ARM64_BACKEND.md) — ARM64 backend architecture notes.
-- [docs/ARM64_GADGET_FUSION_PLAN.md](docs/ARM64_GADGET_FUSION_PLAN.md) — executor optimization notes.
 - [docs/LINUX_BUILD_AND_HOST_ABI.md](docs/LINUX_BUILD_AND_HOST_ABI.md) — Linux-host build/platform notes.
 - [docs/ORIGINAL_ISH_README.md](docs/ORIGINAL_ISH_README.md) — preserved upstream/fork README material.
 

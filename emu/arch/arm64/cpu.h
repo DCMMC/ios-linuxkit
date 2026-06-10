@@ -125,13 +125,13 @@ static inline void arm64_sync_nzcv(struct cpu_state *cpu) {
                 ((cpu->cf & 1) << 29) | ((cpu->vf & 1) << 28);
 }
 
-// Collapse flags (for compatibility with x86 interface)
+// Collapse flags (no-op for canonical ARM64 NZCV state)
 static inline void collapse_flags(struct cpu_state *cpu) {
     // ARM64 flags are always in their canonical form
     (void)cpu;
 }
 
-// Expand flags (for compatibility with x86 interface)
+// Expand flags (no-op for canonical ARM64 NZCV state)
 static inline void expand_flags(struct cpu_state *cpu) {
     // ARM64 flags are always in their canonical form
     (void)cpu;

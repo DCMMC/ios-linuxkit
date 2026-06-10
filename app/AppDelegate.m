@@ -208,11 +208,12 @@ void SyncHostname(void) {
 - (void)configureDns {
 #if !ISH_LINUX
     struct __res_state res;
-    if (EXIT_SUCCESS != res_ninit(&res)) {
-        exit(2);
+    BOOL resolverInitialized = EXIT_SUCCESS == res_ninit(&res);
+    if (!resolverInitialized) {
+        NSLog(@"[DNS] res_ninit failed, falling back to public resolver");
     }
     NSMutableString *resolvConf = [NSMutableString new];
-    if (res.dnsrch[0] != NULL) {
+    if (resolverInitialized && res.dnsrch[0] != NULL) {
         [resolvConf appendString:@"search"];
         for (int i = 0; res.dnsrch[i] != NULL; i++) {
             [resolvConf appendFormat:@" %s", res.dnsrch[i]];
@@ -220,16 +221,27 @@ void SyncHostname(void) {
         [resolvConf appendString:@"\n"];
     }
     union res_sockaddr_union servers[NI_MAXSERV];
-    int serversFound = res_getservers(&res, servers, NI_MAXSERV);
+    int serversFound = resolverInitialized && res.nscount > 0 ? res_getservers(&res, servers, NI_MAXSERV) : 0;
     char address[NI_MAXHOST];
+    int nameserversWritten = 0;
     for (int i = 0; i < serversFound; i ++) {
         union res_sockaddr_union s = servers[i];
         if (s.sin.sin_len == 0)
             continue;
-        getnameinfo((struct sockaddr *) &s.sin, s.sin.sin_len,
-                    address, sizeof(address),
-                    NULL, 0, NI_NUMERICHOST);
+        int err = getnameinfo((struct sockaddr *) &s.sin, s.sin.sin_len,
+                              address, sizeof(address),
+                              NULL, 0, NI_NUMERICHOST);
+        if (err != 0 || address[0] == '\0')
+            continue;
         [resolvConf appendFormat:@"nameserver %s\n", address];
+        nameserversWritten++;
+    }
+    if (resolverInitialized)
+        res_nclose(&res);
+
+    if (nameserversWritten == 0) {
+        NSLog(@"[DNS] no system nameservers found, falling back to 1.1.1.1");
+        [resolvConf appendString:@"nameserver 1.1.1.1\n"];
     }
     
     current = pid_get_task(1);

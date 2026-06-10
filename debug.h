@@ -78,11 +78,7 @@ _Noreturn void die(const char *msg, ...);
 
 #define STRACE(msg, ...) TRACE_(strace, msg, ##__VA_ARGS__)
 
-#if defined(__i386__) || defined(__x86_64__)
-#define debugger __asm__("int3")
-#else
 #include <signal.h>
 #define debugger raise(SIGTRAP)
-#endif
 
 #endif

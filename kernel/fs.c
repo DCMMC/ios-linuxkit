@@ -1247,7 +1247,6 @@ dword_t sys_lchown(addr_t path_addr, uid_t_ owner, uid_t_ group) {
     return sys_fchownat(AT_FDCWD_, path_addr, owner, group, AT_SYMLINK_NOFOLLOW_);
 }
 
-#ifdef GUEST_ARM64
 // ARM64: 64-bit values passed in single registers
 dword_t sys_truncate64(addr_t path_addr, off_t_ size) {
     STRACE("truncate64(%#x, %lld [0x%llx])", path_addr, (long long)size, (unsigned long long)size);
@@ -1277,39 +1276,6 @@ dword_t sys_fallocate(fd_t f, dword_t UNUSED(mode), off_t_ offset, off_t_ len) {
         return generic_fsetattr(fd, make_attr(size, offset + len));
     return 0;
 }
-#else
-// x86: 64-bit values split across two 32-bit registers
-dword_t sys_truncate64(addr_t path_addr, dword_t size_low, dword_t size_high) {
-    off_t_ size = ((qword_t) size_high << 32) | size_low;
-    char path[MAX_PATH];
-    if (user_read_string(path_addr, path, sizeof(path)))
-        return _EFAULT;
-    return generic_setattrat(NULL, path, make_attr(size, size), true);
-}
-
-dword_t sys_ftruncate64(fd_t f, dword_t size_low, dword_t size_high) {
-    off_t_ size = ((qword_t) size_high << 32) | size_low;
-    struct fd *fd = f_get(f);
-    if (fd == NULL)
-        return _EBADF;
-    return generic_fsetattr(fd, make_attr(size, size));
-}
-
-dword_t sys_fallocate(fd_t f, dword_t UNUSED(mode), dword_t offset_low, dword_t offset_high, dword_t len_low, dword_t len_high) {
-    off_t_ offset = ((qword_t) offset_high << 32) | offset_low;
-    off_t_ len = ((qword_t) len_high << 32) | len_low;
-    struct fd *fd = f_get(f);
-    if (fd == NULL)
-        return _EBADF;
-    struct statbuf statbuf;
-    int err = fd->mount->fs->fstat(fd, &statbuf);
-    if (err < 0)
-        return err;
-    if ((uint64_t) offset + (uint64_t) len > statbuf.size)
-        return generic_fsetattr(fd, make_attr(size, offset + len));
-    return 0;
-}
-#endif
 
 dword_t sys_mkdirat(fd_t at_f, addr_t path_addr, mode_t_ mode) {
     char path[MAX_PATH];
@@ -1508,7 +1474,6 @@ dword_t sys_xattr_stub(addr_t UNUSED(path_addr), addr_t UNUSED(name_addr),
     return _ENOTSUP;
 }
 
-#ifdef GUEST_ARM64
 // ARM64: posix_fadvise64 (syscall 223)
 // Advises the kernel about file access patterns.
 // Since we don't do kernel I/O optimization, we can safely ignore these hints.
@@ -1546,19 +1511,3 @@ dword_t sys_mincore(addr_t addr, dword_t length, addr_t vec_addr) {
 
     return 0;  // Success
 }
-#else
-// x86: fadvise64 has different signature/calling convention
-dword_t sys_fadvise64(fd_t f, dword_t offset_low, dword_t offset_high,
-                      dword_t len_low, dword_t len_high, dword_t advice) {
-    uint64_t offset = ((uint64_t)offset_high << 32) | offset_low;
-    uint64_t len = ((uint64_t)len_high << 32) | len_low;
-
-    STRACE("fadvise64(%d, %llu, %llu, %d)", f, offset, len, advice);
-
-    struct fd *fd = f_get(f);
-    if (fd == NULL)
-        return _EBADF;
-
-    return 0;  // Success
-}
-#endif

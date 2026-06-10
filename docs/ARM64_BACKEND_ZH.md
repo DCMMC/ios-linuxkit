@@ -3,9 +3,9 @@
 **Fork 自 [ish-app/ish](https://github.com/ish-app/ish)** — iOS 上的用户态 Linux 模拟器。
 
 本 fork 在上游 iSH 的 threaded-code 解释器（**Asbestos**，2024 年之前叫 *jit*，上游重命名是因为
-它本来就不是真正的 JIT）之上**新增了 ARM64 guest 后端**，在 Apple Silicon 上模拟 AArch64 Linux，
-与原版 x86 (i386) guest 后端并存。结果是一个性能和兼容性大幅提升的 Linux 环境，
-能在 iPhone / iPad 上直接运行 **Python、Node.js、Go、Rust 和原生 CLI 工具**。
+它本来就不是真正的 JIT）之上**新增了 ARM64 guest 后端**，在 Apple Silicon 上模拟 AArch64 Linux。
+`ios-linuxkit` 现在是 ARM64-only：旧的 x86/i386 guest 后端及其调试工具链已经从本仓库移除。
+结果是一个性能和兼容性大幅提升的 Linux 环境，能在 iPhone / iPad 上直接运行 **Python、Node.js、Go、Rust 和原生 CLI 工具**。
 
 > ## 🚢 生产环境使用
 >
@@ -186,7 +186,7 @@ fakefs_bind_mount("/host/path/to/data", "/mnt/data", /*read_only=*/true);
 
 ### 5. Rootfs 管理
 
-- **Alpine 3.21 aarch64**，自带完整 apk 包管理器
+- **Alpine 3.23.4 aarch64**，自带完整 apk 包管理器
 - **RootfsPatch.bundle**: 增量 rootfs 更新的版本化 overlay 系统
 - **Polyfills**: undici/llhttp 的 WebAssembly polyfill、HTTP 下载的 fetch polyfill
 - **OPENSSL_armcap=0** 和 **GODEBUG/GOMAXPROCS** 在 `sys_execve` 中注入
@@ -197,12 +197,11 @@ fakefs_bind_mount("/host/path/to/data", "/mnt/data", /*read_only=*/true);
 
 | Target | Scheme | xcconfig | Guest Arch | Bundle ID 后缀 |
 |--------|--------|----------|------------|------------------|
-| x86（原版） | iSH | `App.xcconfig` | i386 | — |
 | ARM64 | iSH-ARM64 | `AppARM64.xcconfig` | aarch64 | `.arm64` |
 | ARM64 + FFmpeg | iSH-ARM64-ffmpeg | `AppARM64-ffmpeg.xcconfig` | aarch64 | `.arm64` |
 
 ARM64 target 直接链接 `build-arm64-release/` 中 meson 构建的库
-（`libish.a`、`libish_emu.a`、`libfakefs.a`），避免 Xcode 自动发现 x86 的 library target。
+（`libish.a`、`libish_emu.a`、`libfakefs.a`）。旧 x86 target 和相关工具已经从 ARM64-only 树中移除。
 
 ```bash
 # 构建 ARM64 CLI（macOS，测试用）
@@ -217,8 +216,8 @@ ninja -C build-arm64-release
 
 ## 性能
 
-使用 `benchmark/run.sh` 在 macOS 26.4.1 / Apple Silicon 上测试，采用 guest 内置计时
-（排除启动开销）。完整数据见
+下面的 x86-vs-ARM64 数字来自 ARM64-only 清理之前的历史对比 harness，在 macOS 26.4.1 /
+Apple Silicon 上用 guest 内置计时（排除启动开销）。该 harness 已经随 x86 后端一起退役；完整历史数据见
 **[benchmark/BENCHMARK_PERF.md](benchmark/BENCHMARK_PERF.md)**。
 
 ### 相对原生的开销（按负载类型）
@@ -241,23 +240,22 @@ ninja -C build-arm64-release
 
 > **ARM64 为什么快**: 同架构 gadget 分派（每条 guest 指令只需对应 gadget 中的几条 host 指令）、完整 NEON + 加密扩展、
 > 48-bit 地址空间支持 V8/Go/Rust，以及 Node.js 专项修复（V8 二进制补丁、守护页、`--jitless`
-> 注入、io_uring syscall）—— 这些上游 x86 分支都没有。Node.js 22 在 x86 iSH 上无法运行
-> （缺少 syscall 425 即 `io_uring_setup`）。
+> 注入以及 syscall 覆盖）。这些历史对比解释了为什么 `ios-linuxkit` 退役旧 x86 guest/backend。
 
 ## 兼容性
 
-205 项测试覆盖 18 个分类（基础 OS、文件操作、文本处理、构建、Python、Node.js、
+历史兼容性对比覆盖 205 项测试、18 个分类（基础 OS、文件操作、文本处理、构建、Python、Node.js、
 Go/Rust/Perl/…、网络、VCS、编辑器、Shell、数据库、多媒体、加密、系统监控、调试、
-包管理、信号）。两个架构在相同 fakefs 环境下安装相同软件包后测试。完整报告见
-**[benchmark/BENCHMARK_COMPAT.md](benchmark/BENCHMARK_COMPAT.md)**。
+包管理、信号）。完整历史报告见 **[benchmark/BENCHMARK_COMPAT.md](benchmark/BENCHMARK_COMPAT.md)**。
+当前验证入口是 [RUNTIME_VALIDATION.md](RUNTIME_VALIDATION.md) 和
+[ARM64_WORKLOAD_SMOKE_TESTS.md](ARM64_WORKLOAD_SMOKE_TESTS.md) 中的 ARM64 runtime/workload smoke gates。
 
 | 架构 | 通过 | 失败 | 通过率 |
 |---|:---:|:---:|:---:|
-| **x86** (Jitter, threaded-code) | 201 | 4 | **98%** |
+| **旧 x86** (Jitter, threaded-code) | 201 | 4 | **98%** |
 | **ARM64** (Asbestos, threaded-code) | 205 | 0 | **100%** |
 
-**x86 的 4 项失败**均为模拟器真实限制（而非 benchmark bug）：
-`automake`、`perl`（/dev/null 写入 quirk）、`go env`、`go compile`（32-bit 虚拟地址空间限制）。
+旧 x86 行仅保留为历史数据；当前源码树不再构建或发布该后端。
 
 ---
 
@@ -343,11 +341,12 @@ iSH/
 │   ├── ISHShellExecutor.h/m     # Shell 执行 API
 │   ├── DebugServer.c/h          # JSON-RPC 调试服务
 │   └── RootfsPatch.bundle/      # 版本化 rootfs overlay
-└── benchmark/
-    ├── run.sh                   # 统一入口
-    ├── assets/                  # 测试脚本和预编译二进制
-    ├── BENCHMARK_PERF.md        # 性能报告
-    └── BENCHMARK_COMPAT.md      # 兼容性报告
+├── benchmark/
+│   └── assets/                  # 可复用的 benchmark 脚本/源码资产
+└── docs/
+    └── benchmark/
+        ├── BENCHMARK_PERF.md    # 历史性能报告
+        └── BENCHMARK_COMPAT.md  # 历史兼容性报告
 ```
 
 ---

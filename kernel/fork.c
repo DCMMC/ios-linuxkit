@@ -134,7 +134,7 @@ static int copy_task(struct task *task, dword_t flags, addr_t stack, addr_t ptid
     if (flags & CLONE_SETTLS_) {
 #if defined(GUEST_ARM64)
         // On ARM64, the TLS argument is the actual TLS pointer value (for TPIDR_EL0),
-        // not a pointer to a descriptor structure like x86.
+        // not a pointer to a descriptor structure.
         task->cpu.tls_ptr = tls_addr;
 #else
         err = task_set_thread_area(task, tls_addr);

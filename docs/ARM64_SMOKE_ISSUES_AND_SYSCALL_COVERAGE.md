@@ -1,16 +1,16 @@
 # ios-linuxkit ARM64 smoke issues and syscall coverage appraisal
 
-Updated: 2026-05-17
+Updated: 2026-05-20
 
 ## Executive status
 
 The current ARM64 Linux-host fakefs is in a good core-runtime state:
 
-- Staged runtime coverage: **83 / 83 passing** (`/workspace/tmp/ish-arm64-runtime-coverage-20260517-092759.md`).
+- Staged runtime coverage: **83 / 83 passing** (`/workspace/tmp/ish-arm64-runtime-coverage-20260519-214307.md`).
 - Benchmarks Game core tier: **9 official language rows × 10 benchmarks = 90 / 90 runs passing**.
 - Java-equivalent probe: **10 / 10 passing** in HotSpot default mixed mode; interpreter fallback mode also passes.
 - Native compiler rows additionally build inside the guest: **GCC 10 / 10 builds**, **G++ 10 / 10 builds**.
-- The rows now include interpreted runtimes, managed runtimes, native compilers, big integers, regex engines, pipes/stdin/stdout, `fork()`, guest pthreads, futex-heavy language runtimes, SysV shared-memory/message-queue IPC, `fchmodat2(AT_EMPTY_PATH)`, scheduler priority syscall coverage, high-address `MAP_NORESERVE` reservation-overlap regression coverage, Alpine npm CLI package startup coverage, staged Python/Lua/Java/Clojure/PyPy/Swift/C# NativeAOT SDK availability/Rust/Erlang/Zig smoke or availability coverage, and CLI corner-case coverage including `htop`/`btop` under `tmux`, Docker CLI plus Docker daemon rows reported as unsupported where kernel container primitives are unavailable, direct HTTPS `curl`/`git`, and `rcarmo/go-gte` clone.
+- The rows now include interpreted runtimes, managed runtimes, native compilers, big integers, regex engines, pipes/stdin/stdout, `fork()`, guest pthreads, futex-heavy language runtimes, SysV shared-memory/message-queue IPC, `fchmodat2(AT_EMPTY_PATH)`, scheduler priority syscall coverage, high-address `MAP_NORESERVE` reservation-overlap regression coverage, Alpine npm CLI package startup coverage, staged Python/Lua/Java/Clojure/PyPy/Swift/C# NativeAOT SDK availability/Rust/Erlang/Zig smoke or availability coverage, and CLI corner-case coverage including `htop`/`btop` under `tmux`, Docker CLI plus Docker daemon rows reported as unsupported where kernel container primitives are unavailable, `drill`/`dig` DNS, direct HTTPS `curl`/`git`, and `rcarmo/go-gte` clone.
 
 ## Issues found by smoke workloads
 
@@ -27,6 +27,7 @@ The current ARM64 Linux-host fakefs is in a good core-runtime state:
 | Bun/JSC smoke | `bun -e`, timers, and server startup could stall. | JSC parallel/concurrent GC uses signal coordination patterns that exposed iSH scheduling/signal-delivery limits. | **Mitigated correctly for this runtime**: ARM64 guest shim constrains JSC to one marker and disables concurrent GC. |
 | go-gte workload | Model conversion trapped on AdvSIMD FP widening conversion. | Missing ARM64 `FCVTL`/`FCVTL2` instruction coverage. | **Fixed**: H→S and S→D widening conversion handlers added. |
 | curl/git HTTPS DNS | `curl https://github.com` and HTTPS `git`/libcurl failed with `Could not contact DNS servers`, while `getent` and `nslookup` resolved the same host. | c-ares passed an oversized source-address buffer length to UDP `recvfrom()`; iSH returned `EINVAL` instead of accepting the large buffer and reporting the actual address length as Linux does. | **Fixed**: `recvfrom()` clamps oversized source sockaddr lengths to the internal maximum; direct curl, `git ls-remote`, and `git clone https://github.com/rcarmo/go-gte.git` now pass without `/etc/hosts` workaround. |
+| BIND `dig` DNS | `dig +time=2 +tries=1 example.com A` failed during UDP setup with `invalid file` / `no servers could be reached`, while `drill` and c-ares DNS worked. | BIND/libuv enables Linux UDP extended-error reporting with `IP_RECVERR`/`IPV6_RECVERR`; iSH did not translate those Linux socket options, so `setsockopt()` failed before UDP bind/connect. | **Fixed**: Linux UDP error-queue options and `MSG_ERRQUEUE` are recognized/mapped when host-supported and otherwise ignored as Linux-compat options; `dig` now receives a real UDP answer. |
 | GCC/G++ Benchmarks Game | Several fastest native variants include `immintrin.h`, `x86intrin.h`, SSE, or AVX intrinsics. | Official source is x86-specific, not portable C/C++ and not an ARM64 emulation bug. | **Accounted for, not patched**: rows record these alternatives and select the next official portable source. |
 | GCC/G++ Benchmarks Game | Some threaded `revcomp`/`fasta` variants segfault under Alpine/musl. | The source allocates large per-thread VLAs; musl's default pthread stack is much smaller than the Debian/glibc environment used by the benchmark site. | **Accounted for as source/environment limitation**: rows select the next official portable/non-overflowing variant rather than changing benchmark source. |
 | G++ Benchmarks Game | `fannkuchredux-gpp-5` does not compile with Alpine's current GCC without a missing include fix. | Source uses `int64_t` without including `<cstdint>`. | **Accounted for as source portability issue**: row selects the next official variant instead of patching source. |
@@ -63,7 +64,7 @@ The implemented set is now strong for the workloads currently passing:
 - memory: `mmap`, high ARM64 mmap hints, high anonymous `MAP_NORESERVE` arenas, reservation-aware high-hole allocation/alignment, `munmap`, `mprotect`, `mremap`, `madvise`, `mincore`, `mlock`, `msync`, lazy `MAP_NORESERVE` reservations;
 - synchronization: futex wait/wake/requeue/wake-op, robust lists, nanosleep/timers;
 - filesystems: `openat`, `read`/`write`, `readv`/`writev`, `pread`/`pwrite`, `preadv`/`pwritev`, `getdents64`, `statx`, `fstatat`, `fchmodat2(AT_EMPTY_PATH)`, `copy_file_range`, `sendfile`, `splice`, chmod/chown/link/symlink/rename/unlink/mkdir, `statfs`/`fstatfs`;
-- sockets: core TCP/UDP/Unix socket paths, UDP `sendto`/`recvfrom`, TCP `listen`/`accept`, `getsockname`, socket options, `socketpair`, `accept4`, `sendmsg`/`recvmsg`, `sendmmsg`/`recvmmsg`, fd passing;
+- sockets: core TCP/UDP/Unix socket paths, UDP `sendto`/`recvfrom`, TCP `listen`/`accept`, `getsockname`, socket options including UDP extended-error options, `socketpair`, `accept4`, `sendmsg`/`recvmsg`, `sendmmsg`/`recvmmsg`, fd passing;
 - IPC: SysV shared memory, SysV semaphores, SysV message queues, POSIX message queues, eventfd, epoll, timerfd, inotify;
 - runtime probes: `rseq`, `memfd_create`, `openat2`, `faccessat2`, `fchmodat2`, `preadv2`, `pwritev2`, `process_vm_readv`, `process_vm_writev`, and quiet fallback stubs for remaining modern optional probes.
 
@@ -147,7 +148,7 @@ Noisy ARM64 fault diagnostics (`page fault ...`, register dumps, block instructi
 
 ARM64 iSH now keeps guest barrier classes distinct at translation time: `DMB` emits a host `dmb`, `DSB` emits a host `dsb`, and `ISB` emits a host `isb`. Because the current decoder folds all CRm shareability/domain variants into one gadget per barrier class, the `DMB` and `DSB` gadgets use the strongest host `sy` domain so guest `SY`/`LD`/`ST` forms are not under-serialized.
 
-The staged runtime suite includes `arm64 barriers DMB/DSB/ISB`, which compiles and executes common barrier encodings (`dmb sy`, `dmb ish`, `dmb ishld`, `dmb ishst`, `dsb sy`, `dsb ish`, and `isb`) inside the guest. Latest staged coverage is `/workspace/tmp/ish-arm64-runtime-coverage-20260517-092759.md` with **83 / 83 passing**.
+The staged runtime suite includes `arm64 barriers DMB/DSB/ISB`, which compiles and executes common barrier encodings (`dmb sy`, `dmb ish`, `dmb ishld`, `dmb ishst`, `dsb sy`, `dsb ish`, and `isb`) inside the guest. Latest staged coverage is `/workspace/tmp/ish-arm64-runtime-coverage-20260519-214307.md` with **83 / 83 passing**.
 
 ## 2026-05-12 production audit hardening
 
@@ -158,13 +159,13 @@ The post-production code-smell/logic audit fixed several low-risk but concrete r
 - Initial launch argument construction in `xX_main_Xx.h` is bounds-checked before copying argv entries and injected Node flags into the fixed-size startup buffer.
 - ELF `PT_INTERP` loading in `kernel/exec.c` now rejects empty/oversized interpreter names, checks short reads safely, and explicitly NUL-terminates the path before opening it.
 - Shebang optional-argument trimming no longer walks before the argument string when there is no optional argument.
-- `tools/ptraceomatic.c` now constructs `TERM=...` directly instead of reading memory before the pointer returned by `getenv("TERM")`.
+- Legacy ptraceomatic/x86 debug tooling has been removed from the ARM64-only tree.
 
 Validation after these changes: `make build-arm64-linux-all`, staged runtime coverage **28 / 28 passing** (`/workspace/tmp/ish-arm64-runtime-coverage-20260512-181051.md`), and default mixed-mode Java Hello (`/workspace/tmp/java-hello-audit-r5-20260512.log`, `javac_rc:0`, `java_rc:0`).
 
 ## 2026-05-13 runtime coverage expansion and cleanup fixes
 
-The staged runtime suite has continued expanding since this pass and now validates **83 / 83 passing** in `/workspace/tmp/ish-arm64-runtime-coverage-20260517-092759.md`; this 2026-05-13 tranche added the following language/toolchain smoke or availability coverage:
+The staged runtime suite has continued expanding since this pass and now validates **83 / 83 passing** in `/workspace/tmp/ish-arm64-runtime-coverage-20260519-214307.md`; this 2026-05-13 tranche added the following language/toolchain smoke or availability coverage:
 
 - Python/Lua: version and eval smoke.
 - Java/Clojure: default mixed-mode `javac`/`java`, Java interpreter fallback, and `clojure.main` eval smoke.
@@ -184,12 +185,30 @@ This audit closed two runtime correctness issues found while isolating standalon
 - ARM64 `fchmodat2` syscall 452 is now wired and covered, including `AT_EMPTY_PATH` on an open fd and on `AT_FDCWD`/current directory.
 - High-address lazy `MAP_NORESERVE` reservations are now visible to high-hole allocation, caller-hint rejection, and alignment checks. This prevents later medium Bun/JSC mappings from overlapping an existing reservation; the staged runtime suite covers this with a deliberately misaligned large reservation plus a follow-on medium mapping.
 
-The helper cleanup also keeps ARM64-only reservation handling behind `GUEST_ARM64` in common memory paths; an x86 audit object build confirmed `kernel_memory.c.o` compiles without leaking ARM64 reservation fields into the x86 `struct mem` layout.
+The helper cleanup was followed by an ARM64-only source cleanup that removed the legacy guest/backend split; reservation handling is now part of the active AArch64 memory model rather than guarded for an x86 build lane.
 
 The package rows avoid native credential/keychain integrations during unauthenticated help/version checks; npm scripts or native addons are disabled or stubbed when the row only needs to validate CLI startup.
 
-## 2026-05-17 ARM64 executor Phase 4 reconnaissance status
+## 2026-05-17 ARM64 executor diagnostics status
 
-Phase 4 executor work after the internal-continue tranche remains measurement-only/default-off. The latest commits add opt-in block/hot-trace counters behind `ISH_ARM64_BLOCK_STATS=1` and `ISH_ARM64_HOT_TRACE=1`, including dry-run candidate eligibility and a top-8 eligible-edge heavy-hitter table. They do **not** build or execute hot traces, add guarded exits, change invalidation epochs, store interior trace pointers in `jump_ip`, or change generated gadget streams.
+Speculative Phase 4 hot-trace candidate instrumentation was attempted and removed after review because it added maintenance/diagnostic overhead without significant measured gains or a near-term viable speed path. Retained executor diagnostics are limited to opt-in block/chaining/prechain counters behind `ISH_ARM64_BLOCK_STATS=1`; exact-output runtime coverage should still run without stats output.
 
-The current evidence favors a future first trace prototype constrained to same-page forward edges, preferably adjacent or very-near candidates. Node/Bun gated diagnostics at `/workspace/tmp/ish-arm64-node-bun-perf-20260517-092700.md` passed **10 / 10** and reported `hot_trace_edge_candidate=9148801` out of `hot_trace_edge_samples=12505085` (**73.16%**), with `hot_trace_edge_candidate_adjacent=6560652` and `hot_trace_edge_candidate_le16=6067462`. Default runtime coverage remains **83 / 83** at `/workspace/tmp/ish-arm64-runtime-coverage-20260517-092759.md`; keep stats-enabled diagnostic output out of exact-output runtime coverage gates.
+## 2026-05-19 Go compiler / incoming prechain audit
+
+Repeated fresh-cache Go compiler builds on Alpine 3.23.4 / Go 1.25.10 exposed intermittent guest corruption when ARM64 incoming eager prechain was enabled by default. The failures appeared as nondeterministic `cmd/compile` crashes while compiling standard-library packages such as `fmt`, `syscall`, and `bufio`. Reporting a single guest CPU did not fix the issue; disabling prechain did, and outgoing-only prechain remained stable.
+
+Root cause: incoming prechain patches older source blocks from the later target-block compile path. That is riskier than outgoing prechain because another guest thread may already be executing one of those older blocks. The fix hardens incoming prechain so it:
+
+- only patches slots still marked as ARM64 fake IPs;
+- skips older-block incoming patching while multiple guest threads are active.
+
+Guarded incoming prechain is enabled by default again after validation. Use `ISH_ARM64_EAGER_PRECHAIN_INCOMING=0` as an explicit diagnostic/safety opt-out.
+
+Validation after the hardening and before default promotion:
+
+- default with incoming disabled: fresh Go builds **4 / 4** plus later audit default **3 / 3**;
+- warm Go relinks: **3 / 3**;
+- guarded incoming prechain with `ISH_ARM64_EAGER_PRECHAIN_INCOMING=1`: **4 / 4** fresh Go builds with nonzero incoming patches;
+- full runtime coverage: **83 / 83** at `/workspace/tmp/ish-arm64-runtime-coverage-20260519-205257.md`.
+
+Cold-cache Go rows require a realistic timeout because Alpine's Go package ships standard-library source but no precompiled `/usr/lib/go/pkg/linux_arm64` archives; use `TIMEOUT_S=600` for full coverage that includes cold `go run`.

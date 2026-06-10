@@ -352,7 +352,7 @@ static void setup_sigcontext(struct sigcontext_ *sc, struct cpu_state *cpu) {
     sc->trapno = cpu->trapno;
     if (cpu->trapno == INT_GPF)
         sc->cr2 = cpu->segfault_addr;
-    // Remaining legacy i386 sigcontext fields are left at zero.
+    // Remaining legacy compatibility sigcontext fields are left at zero.
     sc->oldmask = current->blocked & 0xffffffff;
 }
 #endif
@@ -501,7 +501,7 @@ static void receive_signal(struct sighand *sighand, struct siginfo_ *info) {
     if (xsave_extra) {
         // do as the kernel does
         // this is superhypermega condensed version of fpu__alloc_mathframe in
-        // arch/x86/kernel/fpu/signal.c
+        // Linux kernel signal-frame FPU reserve marker behavior.
         sp -= xsave_extra;
         sp &=~ 0x3f;
         sp -= fxsave_extra;
