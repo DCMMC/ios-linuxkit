@@ -847,7 +847,10 @@ dword_t sys_execve(addr_t filename_addr, addr_t argv_addr, addr_t envp_addr) {
     // mode=0: inject only if not present, mode=1: replace existing value
     static const struct { const char *kv; size_t prefix_len; int mode; } inject_envs[] = {
         { "PYTHONMALLOC=malloc", 13, 1 },      // FORCE bypass pymalloc arenas (mode=1: always replace)
-        { "NO_COLOR=1", 9, 0 },                // Disable color output
+        // Enable 24-bit color (ghostty-web supports truecolor). Previously the
+        // engine force-injected NO_COLOR=1, which made claude/every CLI render
+        // monochrome; dropped so apps honor TERM=xterm-256color + COLORTERM.
+        { "COLORTERM=truecolor", 10, 0 },      // mode=0: only if the app didn't set it
         { "PIP_PROGRESS_BAR=off", 17, 0 },     // Disable pip progress bar
         { "PYTHONDONTWRITEBYTECODE=1", 25, 0 }, // Skip .pyc generation to reduce allocs
         // Go async preemption sends SIGURG and reads/modifies mcontext at a
