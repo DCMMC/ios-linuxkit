@@ -391,7 +391,14 @@ static int elf_exec(struct fd *fd, const char *file, struct exec_args argv, stru
 #endif
         {vdso_valid ? AX_SYSINFO_EHDR : AX_IGNORE, current->mm->vdso},
 #if defined(GUEST_ARM64)
-        {AX_HWCAP, 0x003}, // FP|ASIMD only. Keep optional crypto/LSE features hidden until helper coverage is clean.
+        // FP|ASIMD|AES|PMULL|SHA1|SHA2 (0x7b). Crypto extensions are now
+        // advertised: their gadgets are verified correct (OpenSSL AES-GCM/SHA
+        // KATs pass via every crypto-ext path). This matters because BoringSSL
+        // (Bun/claude-code), when PMULL is hidden, falls back to a hand-rolled
+        // vmull_p8-synthesis NEON GHASH that miscomputes the GCM tag here ->
+        // every TLS handshake failed. With PMULL advertised it uses the correct
+        // PMULL GHASH; AES/SHA hw paths also speed up crypto. LSE still hidden.
+        {AX_HWCAP, 0x07b},
 #else
         {AX_HWCAP, 0x00000000}, // suck that
 #endif
